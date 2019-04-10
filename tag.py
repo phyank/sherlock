@@ -2,9 +2,7 @@ import traceback
 from copy import deepcopy
 from tools import *
 
-special={"is":-1,"has":-2,"in":-3,"with":-4,"at":-5}
-
-default_character={"jud":-6,"pol":-7,"pro":-8,"vic":-9,"cri":-10}
+from definitions import *
 
 def manual_tagger():
     g = line_generator("final_all_data/first_stage/train.json")
