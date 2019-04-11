@@ -17,6 +17,7 @@ class Node:
         self.fullname=fullname
         self.addition=""
         self.out_relations=set()
+        self.in_relation=None
 
 class Edge:
     def __init__(self,src,name,dst):
@@ -26,6 +27,7 @@ class Edge:
         self.name=name
         self.dst=dst
         self.dst.father=self.src
+        self.dst.in_relation=self
 
 def tree_to_string(node,dep_name="ROOT"):
     childs_literal=""
@@ -291,6 +293,7 @@ def test():
             for idx in sorted([i['index'] for i in sentence['tokens']],reverse=True):
                 ranked_tokens[idx]=tokenDict[idx]
 
+
             for word_index in ranked_tokens:
                 word=ranked_tokens[word_index]
                 if word['ref']['governor'] != 0 and tokenDict[word['ref']['governor']]['pos'] in ("NN", "NR") and \
@@ -300,11 +303,111 @@ def test():
                     tokenDict[word['ref']['governor']]['ref']['fullname'] = \
                             word['word'] + "|" + tokenDict[word['ref']['governor']]['ref']['fullname']
 
+            testtest = find_relation_by_pattern(['(r)<-[:conj]-()<-[:conj]-(b)'], ranked_tokens)
 
             for a,r,b in sentence['manual_relations']:
                 get_words_relations(a,r,b,tokenDict,final)
     for pattern,frequency in sorted(final.items(),key=lambda i:i[1],reverse=True):
         print(pattern,frequency)
+
+
+def find_relation_by_pattern(patterns,tokenDict):
+    nodes = {}
+    nodes[0] = Node(0, "ROOT", "ROOT")
+    all_edges = {}
+    for a in tokenDict:
+        token = tokenDict[a]
+
+        if a not in nodes:
+            nodes[a] = Node(a, token['word'], token['ref']['fullname'])
+        current_token_node = nodes[a]
+        current_token = token
+        current_token_node.addition = "a"
+
+        while current_token['ref']['governor'] > 0:
+            if current_token['ref']['governor'] not in nodes:
+                father_token = tokenDict[current_token['ref']['governor']]
+                father_token_node = Node(father_token['index'], father_token['word'], father_token['ref']['fullname'])
+                nodes[current_token['ref']['governor']] = father_token_node
+            else:
+                father_token = tokenDict[current_token['ref']['governor']]
+                father_token_node = nodes[current_token['ref']['governor']]
+
+            if father_token_node.name + current_token['ref']['dep'] + current_token_node.name not in all_edges:
+                all_edges[father_token_node.name + current_token['ref']['dep'] + current_token_node.name] = \
+                    Edge(father_token_node, current_token['ref']['dep'], current_token_node)
+            current_token, current_token_node = father_token, father_token_node
+
+        if current_token['ref']['governor'] == 0:
+            father_token_node = nodes[0]
+            if father_token_node.name + current_token['ref']['dep'] + current_token_node.name not in all_edges:
+                all_edges[father_token_node.name + current_token['ref']['dep'] + current_token_node.name] = \
+                    Edge(father_token_node, current_token['ref']['dep'], current_token_node)
+    # t=Tree.fromstring(tree_to_string(nodes[0]))
+    # t.draw()
+    relations=[]
+    for pattern in patterns:
+        for tokenIndex in tokenDict:
+            token=tokenDict[tokenIndex]
+            if ("<" not in pattern and ">" in pattern) or(">" not in pattern and "<" in pattern):
+                if "<" in pattern:reverse=True
+                else:reverse=False
+
+                if ">" in pattern:
+                    r_pttrn=r"-\[[\w\d:]+\]->"
+                else:
+                    r_pttrn = r"<-\[[\w\d:]+\]-"
+                pttrn_nodes_path=re.findall("\([\w\d_]*\)",pattern)
+                pttrn_nodes_path=[i[:-1][1:] for i in pttrn_nodes_path]
+
+                required_roles=set()
+                for i in pttrn_nodes_path:
+                    if i:required_roles.add(i)
+
+                pttrn_relation_path0=re.findall(r_pttrn,pattern)
+                pttrn_relation_path = [re.search("[\w\d]+:?[\w\d]*", i).group() for i in pttrn_relation_path0]
+                if reverse:
+                    pttrn_nodes_path.reverse()
+                    pttrn_relation_path.reverse()
+
+                assert pttrn_nodes_path and pttrn_relation_path
+                role={}
+                relation_gen=(i for i in pttrn_relation_path)
+
+                current=nodes[tokenIndex]
+                found=True
+                for pttrn_node in pttrn_nodes_path:
+                    try:
+                        pttrn_dep=relation_gen.__next__()
+                    except StopIteration:
+                        pttrn_dep=None
+
+                    if pttrn_node:
+                        assert pttrn_node not in role
+                        role[current.index]=current.name+pttrn_node
+                        required_roles.remove(pttrn_node)
+
+                    if pttrn_dep is not None and current.in_relation is not None:
+                        if pttrn_dep==current.in_relation.name:
+                            current=current.father
+                            continue
+                        else:
+                            found=False
+                            break
+                    else:
+                        if required_roles:
+                            found=False
+                        break
+                if found:
+                    # print(required_roles)
+                    relations.append(role)
+    print(relations)
+
+
+
+
+
+
 
 
 
