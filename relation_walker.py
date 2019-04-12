@@ -256,9 +256,6 @@ def get_words_relations(a,r,b,tokenDict,final):
         except:
             final[dd]=1
 
-        # tstr=tree_to_string(root)
-        # t = Tree.fromstring(tstr)
-        # t.draw()
     elif a<0:
         pass
     elif b<0:
@@ -270,8 +267,6 @@ def test():
     final = {}
     for article in line_generator("tagged.json",encoding='gbk'):
         articleDict=json.loads(article)
-
-
 
         lastSentenceSubject=None
         lastSentenceMainVerb=None
@@ -303,13 +298,31 @@ def test():
                     tokenDict[word['ref']['governor']]['ref']['fullname'] = \
                             word['word'] + "|" + tokenDict[word['ref']['governor']]['ref']['fullname']
 
-            testtest = find_relation_by_pattern(['(r)<-[:conj]-()<-[:conj]-(b)'], ranked_tokens)
+            testtest = find_relation_by_pattern(['(r)-[:conj]->()<-[:nsubj]-(a)'], ranked_tokens)
 
             for a,r,b in sentence['manual_relations']:
                 get_words_relations(a,r,b,tokenDict,final)
     for pattern,frequency in sorted(final.items(),key=lambda i:i[1],reverse=True):
         print(pattern,frequency)
 
+class Gen:
+    def __init__(self,iterable):
+        self.iterable=iterable
+        self.pointer=0
+    def __next__(self):
+        if self.pointer<self.__len__():
+            r=self.iterable[self.pointer]
+            self.pointer+=1
+            return r
+        else:
+            raise StopIteration
+
+    def __deepcopy__(self, memodict={}):
+        copy=Gen(deepcopy(self.iterable))
+        copy.pointer=self.pointer
+        return copy
+    def __len__(self):
+        return len(self.iterable)
 
 def find_relation_by_pattern(patterns,tokenDict):
     nodes = {}
@@ -347,16 +360,65 @@ def find_relation_by_pattern(patterns,tokenDict):
     # t.draw()
     relations=[]
     for pattern in patterns:
+        # for tokenIndex in tokenDict:
+        #     token=tokenDict[tokenIndex]
+        #     if ("<" not in pattern and ">" in pattern) or(">" not in pattern and "<" in pattern):
+        #         if "<" in pattern:reverse=True
+        #         else:reverse=False
+        #
+        #         if ">" in pattern:
+        #             r_pttrn=r"-\[[\w\d:]+\]->"
+        #         else:
+        #             r_pttrn = r"<-\[[\w\d:]+\]-"
+        #         pttrn_nodes_path=re.findall("\([\w\d_]*\)",pattern)
+        #         pttrn_nodes_path=[i[:-1][1:] for i in pttrn_nodes_path]
+        #
+        #         required_roles=set()
+        #         for i in pttrn_nodes_path:
+        #             if i:required_roles.add(i)
+        #
+        #         pttrn_relation_path0=re.findall(r_pttrn,pattern)
+        #         pttrn_relation_path = [re.search("[\w\d]+:?[\w\d]*", i).group() for i in pttrn_relation_path0]
+        #         if reverse:
+        #             pttrn_nodes_path.reverse()
+        #             pttrn_relation_path.reverse()
+        #
+        #         assert pttrn_nodes_path and pttrn_relation_path
+        #         role={}
+        #         relation_gen=(i for i in pttrn_relation_path)
+        #
+        #         current=nodes[tokenIndex]
+        #         found=True
+        #         for pttrn_node in pttrn_nodes_path:
+        #             try:
+        #                 pttrn_dep=relation_gen.__next__()
+        #             except StopIteration:
+        #                 pttrn_dep=None
+        #
+        #             if pttrn_node:
+        #                 assert pttrn_node not in role
+        #                 role[current.index]=current.name+pttrn_node
+        #                 required_roles.remove(pttrn_node)
+        #
+        #             if pttrn_dep is not None and current.in_relation is not None:
+        #                 if pttrn_dep==current.in_relation.name:
+        #                     current=current.father
+        #                     continue
+        #                 else:
+        #                     found=False
+        #                     break
+        #             else:
+        #                 if required_roles:
+        #                     found=False
+        #                 break
+        #         if found:
+        #             # print(required_roles)
+        #             relations.append(role)
         for tokenIndex in tokenDict:
-            token=tokenDict[tokenIndex]
-            if ("<" not in pattern and ">" in pattern) or(">" not in pattern and "<" in pattern):
-                if "<" in pattern:reverse=True
-                else:reverse=False
+                token=tokenDict[tokenIndex]
 
-                if ">" in pattern:
-                    r_pttrn=r"-\[[\w\d:]+\]->"
-                else:
-                    r_pttrn = r"<-\[[\w\d:]+\]-"
+                r_pttrn=r"-\[[\w\d:]+\]->|<-\[[\w\d:]+\]-"
+
                 pttrn_nodes_path=re.findall("\([\w\d_]*\)",pattern)
                 pttrn_nodes_path=[i[:-1][1:] for i in pttrn_nodes_path]
 
@@ -365,53 +427,105 @@ def find_relation_by_pattern(patterns,tokenDict):
                     if i:required_roles.add(i)
 
                 pttrn_relation_path0=re.findall(r_pttrn,pattern)
-                pttrn_relation_path = [re.search("[\w\d]+:?[\w\d]*", i).group() for i in pttrn_relation_path0]
-                if reverse:
-                    pttrn_nodes_path.reverse()
-                    pttrn_relation_path.reverse()
+                pttrn_relation_path = [(re.search("[\w\d]+:?[\w\d]*", i).group(),LEFT if "<" in i else RIGHT) for i in pttrn_relation_path0]
+                # if reverse:
+                #     pttrn_nodes_path.reverse()
+                #     pttrn_relation_path.reverse()
 
                 assert pttrn_nodes_path and pttrn_relation_path
                 role={}
-                relation_gen=(i for i in pttrn_relation_path)
+                pttrn_node_gen=Gen(pttrn_nodes_path)
+                relation_gen=Gen(pttrn_relation_path)
 
-                current=nodes[tokenIndex]
-                found=True
-                for pttrn_node in pttrn_nodes_path:
-                    try:
-                        pttrn_dep=relation_gen.__next__()
-                    except StopIteration:
-                        pttrn_dep=None
+                currents={0:{"current":nodes[tokenIndex],"role":role,"required_roles":required_roles,"pttrn_node":pttrn_node_gen,"rgen":relation_gen,"found":-1}}
 
-                    if pttrn_node:
-                        assert pttrn_node not in role
-                        role[current.index]=current.name+pttrn_node
-                        required_roles.remove(pttrn_node)
-
-                    if pttrn_dep is not None and current.in_relation is not None:
-                        if pttrn_dep==current.in_relation.name:
-                            current=current.father
-                            continue
-                        else:
-                            found=False
+                # print(pttrn_nodes_path)
+                # print(pttrn_relation_path)
+                while currents:
+                    idx=min(currents)
+                    currentAll=currents[idx]
+                    current=currentAll['current']
+                    role=currentAll['role']
+                    pttrn_node_gen=currentAll["pttrn_node"]
+                    relation_gen=currentAll['rgen']
+                    required_roles=currentAll['required_roles']
+                    found = currentAll['found']
+                    while True:
+                        try:
+                            pttrn_node=pttrn_node_gen.__next__()
+                        except StopIteration:
+                            if required_roles:
+                                found=False
+                            else:
+                                found=True
                             break
+
+                        if pttrn_node:
+                            assert pttrn_node not in role
+                            role[current.index]=current.name+pttrn_node
+                            required_roles.remove(pttrn_node)
+
+                        try:
+                            pttrn_dep,dep_direction=relation_gen.__next__()
+                        except StopIteration:
+                            pttrn_dep,dep_direction=None,None
+
+                        if dep_direction is RIGHT:
+                            if pttrn_dep is not None and current.in_relation is not None:
+                                if pttrn_dep==current.in_relation.name:
+                                    current=current.father
+                                    continue
+                                else:
+                                    found=False
+                                    break
+                            else:
+                                if required_roles:
+                                    found=False
+                                break
+                        elif dep_direction is LEFT:
+                            if pttrn_dep is not None and current.out_relations:
+                                for r in current.out_relations:
+                                    if pttrn_dep==r.name:
+                                        currents[max(currents)+1]= \
+                                            {"current": r.dst,
+                                             "role": deepcopy(role),
+                                             "required_roles": deepcopy(required_roles),
+                                             "pttrn_node": deepcopy(pttrn_node_gen),
+                                             "rgen": deepcopy(relation_gen),
+                                             "found": found}
+
+                                        continue
+                                    else:
+                                        continue
+
+                                if required_roles:
+                                    found=False
+                                else:
+                                    found=True
+                                # del currents[idx]
+                                break
+                            else:
+                                if required_roles:
+                                    found=False
+                                else:
+                                    found=True
+                                break
+                        else:
+                            if required_roles:
+                                found=False
+                            else:
+                                found=True
+                            break
+                    if found is True:
+                        relations.append(role)
+                    elif found is False:
+                        pass
                     else:
-                        if required_roles:
-                            found=False
-                        break
-                if found:
-                    # print(required_roles)
-                    relations.append(role)
+                        raise Impossible
+                    del currents[idx]
+    t=Tree.fromstring(tree_to_string(nodes[0]))
     print(relations)
-
-
-
-
-
-
-
-
-
-
+    t.draw()
 
 if __name__=="__main__":
     test()
