@@ -167,3 +167,31 @@ def call_api(data,url="http://localhost:9001",encoding='utf8'):
     rj=response.json()
 
     return rj#Tree.fromstring(rj['sentences'][0]['parse']),rj['sentences'][0]['enhancedPlusPlusDependencies']
+
+def build_token_dict(sentence):
+    tokenDict={}
+    for word in sentence['tokens']:
+        tokenDict[word['index']] = word
+        word['ref']['fullname'] = \
+            word['word']
+
+        word['prefix'] = \
+            ''
+
+
+    ranked_tokens = {}
+    for idx in sorted([i['index'] for i in sentence['tokens']], reverse=True):
+        ranked_tokens[idx] = tokenDict[idx]
+
+    for word_index in ranked_tokens:
+        word = ranked_tokens[word_index]
+        if word['ref']['governor'] != 0 and tokenDict[word['ref']['governor']]['pos'] in ("NN", "NR") and \
+                tokenDict[word['ref']['dependent']]['pos'] not in ("PU"):
+            # print(word)
+            # print("%s PING %s"%(tokenDict[word['ref']['governor']]['ref']['fullname'],word['word']))
+            tokenDict[word['ref']['governor']]['ref']['fullname'] = \
+                word['word'] + "|" + tokenDict[word['ref']['governor']]['ref']['fullname']
+            tokenDict[word['ref']['governor']]['prefix'] = \
+                word['word'] + "|" + tokenDict[word['ref']['governor']]['prefix']
+
+    return ranked_tokens
