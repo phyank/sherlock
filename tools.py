@@ -2,6 +2,7 @@ import json,os,multiprocessing,re
 
 from urllib.request import urlopen
 from urllib.parse import urlencode
+from threading import Thread
 
 import requests
 
@@ -68,6 +69,15 @@ def line_generator(fn,encoding='utf8'):
             yield line
         else:
             return
+
+def run_draw(sentence_repr):
+    Tree.fromstring(sentence_repr).draw()
+
+def async_run_draw(sentence_repr,daemon=True):
+    drawThread = Thread(target=run_draw, args=((sentence_repr,)))
+    drawThread.daemon = daemon
+    drawThread.start()
+    print("start")
 
 def lac_cut(article):
     result = urlopen("http://127.0.0.1:18080/lac",
