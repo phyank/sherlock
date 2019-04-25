@@ -8,7 +8,7 @@ from nltk.tree import Tree
 from definitions import *
 from relation_walker import *
 
-PATTERN_MIN_FREQ=10
+
 
 def run_draw(sentence_repr):
     Tree.fromstring(sentence_repr).draw()
@@ -22,7 +22,7 @@ def manual_tagger(draw_tree=False):
             pass
         of = open("tagged.json", "r")
 
-
+    train_pattern_classifier()
 
     index=len(of.readlines())+1
     skip=index
@@ -38,6 +38,14 @@ def manual_tagger(draw_tree=False):
             for i in patterns0:
                 if i['frequency'] >= PATTERN_MIN_FREQ:
                     patterns.append(i['pattern'])
+
+        with open("classifiers.json", 'r') as infile:
+            clfsb64 = json.load(infile)
+
+        clfs={}
+
+        for pattern in clfsb64:
+            clfs[pattern]=pickle.loads(base64.b64decode(clfsb64[pattern].encode('ascii')))
 
         of = open("tagged.json", "a")
         articleJSON = json.loads(g.__next__())
@@ -74,11 +82,14 @@ def manual_tagger(draw_tree=False):
             for k in default_character:
                 tokenDict[default_character[k]]={"word":k}
 
+            commas = set()
             for word in sentence['tokens']:
                 lac=lac_result_gen.__next__()
                 assert lac['word']==word['word']
                 word['lac_pos']=lac['type']
                 tokenDict[word['index']]=word
+
+                if word['word'] in ",，；;、": commas.add(word['index'])
 
             rankingDict = {}
             for word in sentence['enhancedPlusPlusDependencies']:
@@ -94,14 +105,45 @@ def manual_tagger(draw_tree=False):
                     tokenDict[word['governor']]['ref']['dependentGloss']= \
                     word['dependentGloss']+"|"+tokenDict[word['governor']]['ref']['dependentGloss']
                     # sentence['enhancedPlusPlusDependencies'].remove(word)
-            print(" ".join(map(lambda x:("%s(%d%s%s->%s)"%(x['dependentGloss'],x['dependent'],tokenDict[x['dependent']]['pos'],tokenDict[x['dependent']]['lac_pos'],tokenDict[x['governor']]['word'])) ,[rankingDict[idx] for idx in idxs])))
 
             if draw_tree:
                 async_run_draw(sentence['parse'])
 
-            auto_relations=find_relation_by_pattern(patterns,ranked_tokens,print_result=False)
+            auto_relations0=find_relation_by_pattern(patterns,ranked_tokens,print_result=False)
 
+            auto_relations=[]
+            for r in auto_relations0:
+                thisPattern=r['pattern']
+                if 'idx' not in r['r']:
+                    thisPattern+="?"+r['r']['w']
+                try:
+                    clf=clfs[thisPattern]
+                except KeyError:
+                    print("Pattern classifier not found : %s"%thisPattern)
+                    auto_relations.append(r)
+                else:
+                    max_idx = max((r[k]['idx'] for k in r if ((k not in ("pattern", "id")) and ('idx' in r[k]))))
+                    min_idx = min((r[k]['idx'] for k in r if ((k not in ("pattern", "id")) and ('idx' in r[k]))))
+                    has_comma = False
+                    for comma in commas:
+                        if comma > min_idx and comma < max_idx:
+                            has_comma = True
+                            break
+                    result=clf.predict(np.ndarray(shape=(1,7),dtype='int',buffer=np.array((pos2i(tokenDict[r['a']['idx']]['lac_pos']),
+                         pos2i(tokenDict[r['r']['idx']]['lac_pos'] if 'idx' in r['r'] else "None"),
+                         pos2i(tokenDict[r['b']['idx']]['lac_pos']),
+                         abs(r['r']['idx'] - r['a']['idx']) if 'idx' in r['r'] and r['r']['idx'] > 0 else 0,
+                         abs(r['b']['idx'] - r['r']['idx']) if 'idx' in r['r'] and r['r']['idx'] > 0 else 0,
+                         abs(r['b']['idx'] - r['a']['idx']),
+                         comma_marker["comma" if has_comma else "no_comma"]))))[0]
+                    if result==1:
+                        auto_relations.append(r)
+                    else:
+                        print("flitered %s %s %s"%(r['a']['w'],r['r']['w'],r['b']['w']))
 
+            print(" ".join(map(lambda x: ("%s(%d%s%s->%s)" % (
+            x['dependentGloss'], x['dependent'], tokenDict[x['dependent']]['pos'], tokenDict[x['dependent']]['lac_pos'],
+            tokenDict[x['governor']]['word'])), [rankingDict[idx] for idx in idxs])))
 
             relations=[]
 
@@ -199,6 +241,7 @@ def manual_tagger(draw_tree=False):
         of.write("\n")
         of.close()
         extract_dep_patterns(to_write=True)
+        train_pattern_classifier()
         index+=1
 def tag_test():
     manual_tagger()

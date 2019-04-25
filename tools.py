@@ -14,6 +14,8 @@ from nltk.tree import Tree
 
 import py2neo
 
+PATTERN_MIN_FREQ=10
+
 lac2penn={"n":"NN",
      "nr":"NR",
      "nz":"NR",
@@ -45,6 +47,49 @@ lac2penn={"n":"NN",
           "ORG":"NR"
      }
 
+lac2int={
+    "n":0,
+     "nr":1,
+     "nz":2,
+     "a":3,#?? JJ
+     "m":4,#??
+     "c":5,
+     "PER":6,
+     "f":7,
+     "ns":8,
+     "v":9,
+     "ad":10,
+     "q":11,
+     "u":12,#????? DEC DEG DER DEV SP AS ETC MSP
+     "LOC":13,
+     "s":14,#??处所名词
+     "nt":15,
+     "vd":16,#??动副词
+     "an":17,#??名形词
+      "r":18,
+     "xc":19,#??其他虚词
+     "t":20,
+     "nw":21,
+     "vn":22,
+     "d":23,
+     "p":24,
+     "w":25,
+     "TIME":26,
+     "[D:PROSECUTOR]":27,
+         "ORG":28,
+         "None":29,
+         "OTHER":99
+     }
+
+comma_marker={"comma":1,
+              "no_comma":0}
+
+CLASS={"Y":1,
+       "N":0}
+
+CLASS_LIT={1:"Y",
+           0:"N"}
+
 ACTION=0
 OBJECT=1
 ENV=2
@@ -69,6 +114,14 @@ def line_generator(fn,encoding='utf8'):
             yield line
         else:
             return
+
+def pos2i(pos):
+    try:
+        return lac2int[pos]
+    except KeyError:
+        print("unknown pos tag %s"%pos)
+        return lac2int["OTHER"]
+
 
 def run_draw(sentence_repr):
     Tree.fromstring(sentence_repr).draw()

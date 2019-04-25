@@ -1,9 +1,11 @@
-import traceback,json
+import traceback,json,pickle,base64
 from copy import deepcopy
 from tools import *
 from definitions import *
 
 from nltk.tree import Tree
+import numpy as np
+from sklearn.naive_bayes import MultinomialNB,ComplementNB
 
 class Impossible(Exception):
     pass
@@ -316,6 +318,9 @@ def make_ranked_token_dict(tokens,reverse=True):
                 word['word'] + "|" + tokenDict[word['ref']['governor']]['ref']['fullname']
     return ranked_tokens
 
+def no_distance(x):
+    return x[0],x[1],x[2],x[6]
+
 def train_pattern_classifier():
     with open("dependencyRelationPattern.json", 'r') as infile:
         patterns0 = json.load(infile)
@@ -342,7 +347,30 @@ def train_pattern_classifier():
                 except KeyError:
                     training_set_by_pattern[pattern]={'data':this_training_set_by_pattern[pattern][0],
                                                       'label':this_training_set_by_pattern[pattern][1]}
-    print(training_set_by_pattern)
+    classifiers={}
+    for aPattern in training_set_by_pattern:
+        data0,label=training_set_by_pattern[aPattern]['data'],training_set_by_pattern[aPattern]['label']
+        if not data0 or len(data0)<PATTERN_MIN_FREQ:continue
+        data=[]
+        for i in data0:data+=i
+        # print(aPattern)
+
+        dataArray=np.ndarray(shape=(len(data0),7),dtype='int',buffer=np.array(data))
+        labelArray=np.array(label)
+        # print(len(dataArray), len(labelArray))
+        clf = ComplementNB()
+        clf.fit(dataArray, labelArray)
+        # print([(clf.predict(dataArray)[i],labelArray[i]) for i in range(len(labelArray))])
+        count=len(dataArray)
+        hit=0
+        p=clf.predict(dataArray)
+        for i in range(len(dataArray)):
+            if p[i]==labelArray[i]:hit+=1
+        print("pattern %s correct %.2f all %d"%(aPattern,hit/count,count))
+        classifiers[aPattern]=base64.b64encode(pickle.dumps(clf)).decode('ascii')
+    with open("classifiers.json",'w') as of:
+        json.dump(classifiers,of)
+
 def extract_dep_patterns(to_write=False):
     final = {}
     with open("dependencyRelationPattern.json", 'r') as infile:
@@ -593,25 +621,27 @@ def generate_training_set(patterns,tokenDict,manual_relations):
 
     # async_run_draw(tree_to_string(nodes[0]),daemon=False)
     training_data_by_pattern={}
-    for pattern in patterns:
+    for pattern00 in patterns:
         relations = []
         ARB=1
         AB=0
-        if "," in pattern:
+        if "," in pattern00:
             relationType=ARB
-            pattern0,pattern1=pattern.split(",")
+            pattern0,pattern1=pattern00.split(",")
         else:
             relationType=AB
             r="NOT_AVAILABLE"
-            if "?" in pattern:
-                pattern,r=pattern.split("?")
+            if "?" in pattern00:
+                pattern,r=pattern00.split("?")
+            else:
+                pattern=pattern00
         for tokenIndex in tokenDict:
             if relationType==AB:
                 results=find_relation_by_pattern_token_and_tree_given(tokenIndex,pattern,nodes,tokenDict)
                 for i in results:
                     i['r']={'w':r,'idx':-100}
                     i['pattern']=pattern
-                print(results)
+                #print(results)
                 relations=relations+results
             elif relationType==ARB:
                 firstStage=find_relation_by_pattern_token_and_tree_given(tokenIndex,pattern0,nodes,tokenDict)
@@ -641,16 +671,22 @@ def generate_training_set(patterns,tokenDict,manual_relations):
                 if comma>min_idx and comma<max_idx:
                     has_comma=True
                     break
-            data.append((tokenDict[r['a']['idx']]['lac_pos'],tokenDict[r['r']['idx']]['lac_pos'],tokenDict[r['b']['idx']]['lac_pos'],r['r']['idx']-r['a']['idx'],r['b']['idx']-r['r']['idx'],r['b']['idx']-r['a']['idx'],"comma" if has_comma else "no_comma"))
+            data.append((pos2i(tokenDict[r['a']['idx']]['lac_pos']),
+                         pos2i(tokenDict[r['r']['idx']]['lac_pos']),
+                         pos2i(tokenDict[r['b']['idx']]['lac_pos']),
+                         abs(r['r']['idx']-r['a']['idx']) if r['r']['idx']>0 else 0,
+                         abs(r['b']['idx']-r['r']['idx']) if r['r']['idx']>0 else 0,
+                         abs(r['b']['idx']-r['a']['idx']),
+                         comma_marker["comma" if has_comma else "no_comma"]))
             if "%d,%d,%d"%(r['a']['idx'],r['r']['idx'],r['b']['idx']) in labeled_relations:
-                label.append("Y")
+                label.append(CLASS["Y"])
             else:
                 # print("%d,%d,%d"%(r['a']['idx'],r['r']['idx'],r['b']['idx']) ,"not in ",labeled_relations)
-                label.append("N")
+                label.append(CLASS["N"])
             # print(r['a']['w'],tokenDict[r['a']['idx']]['lac_pos'],r['r']['w'],r['b']['w'],tokenDict[r['b']['idx']]['lac_pos'],"  ",r['pattern'])
         # for i in range(len(data)):
         #     print(data,label)
-        training_data_by_pattern[pattern]=(data,label)
+        training_data_by_pattern[pattern00]=(data,label)
     return training_data_by_pattern
 
 def find_relation_by_pattern(patterns,tokenDict,print_result=True):
