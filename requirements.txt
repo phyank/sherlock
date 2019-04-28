@@ -1,0 +1,4 @@
+requests
+jieba
+nltk
+py2neo

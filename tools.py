@@ -19,7 +19,7 @@ PATTERN_MIN_FREQ=10
 lac2penn={"n":"NN",
      "nr":"NR",
      "nz":"NR",
-     "a":"VA",#?? JJ
+     "a":"JJ",#?? VA
      "m":"CD",#??
      "c":"CC",
      "PER":"NR",
@@ -32,7 +32,7 @@ lac2penn={"n":"NN",
      "LOC":"NR",
      "s":"NR",#??处所名词
      "nt":"NR",
-     "vd":"VV",#??动副词
+     "vd":"VV",#??d
      "an":"NN",#??名形词
       "r":"PN",
      "xc":"MSP",#??其他虚词
@@ -44,6 +44,8 @@ lac2penn={"n":"NN",
      "w":"PU",
      "TIME":"NT",
      "[D:PROSECUTOR]":"NR",
+    "[D:LEGAL_NOUN]":"NN",
+"[D:NR]":"NR",
           "ORG":"NR"
      }
 
@@ -78,6 +80,8 @@ lac2int={
      "[D:PROSECUTOR]":27,
          "ORG":28,
          "None":29,
+"[D:LEGAL_NOUN]":30,
+"[D:NR]":30,
          "OTHER":99
      }
 
@@ -101,6 +105,8 @@ MODEL_PATH= STANFORD_ROOT + 'stanford-parser-3.9.2-models.jar'
 CHN_MODEL_PATH= STANFORD_ROOT + 'stanford-chinese-corenlp-2018-10-05-models.jar'
 
 PCFG_PATH="edu/stanford/nlp/models/lexparser/chinesePCFG.ser.gz"
+
+PASSWORD='rq2j3fja9phwdfn2l3famsdoi1234t2143ghdsnwsqety56i'
 
 JAVA_HOME = os.environ.get("JAVA_HOME")
 if not JAVA_HOME:
@@ -132,8 +138,61 @@ def async_run_draw(sentence_repr,daemon=True):
     drawThread.start()
     print("start")
 
-def lac_cut(article):
-    result = urlopen("http://127.0.0.1:18080/lac",
+def call_stanford(tagged,host="http://127.0.0.1:9001/stanford"):
+    sentences=[]
+    sentence = []
+    tokenDict={}
+    for w in tagged:
+        if lac2penn[w['type']]:
+            sentence.append(w['word'] + "/" + lac2penn[w['type']])
+        else:
+            sentence.append(w['word'])
+
+        if w['word'] in "。；？！……":
+            sentences.append(sentence)
+            sentence=[]
+        #I want to break the paragraph into sentences but the Parser still cut as a paragraph
+
+    last_index=0
+    for s in sentences:
+        tmp_token_dict={}
+        line_index=0
+        result=urlopen(host,data=urlencode({"sentence":" ".join(s) +"\n",
+                                 "passwd":PASSWORD}).encode('utf8')).read().decode("utf8")
+    # print(result)
+        for token in result.split("\n"):
+            # print(repr(token))
+            try:
+                line_index, word, lemma, ctag, tag, feats, head, rel, _, _ =token.split("\t")
+            except ValueError:
+                continue
+            else:
+                line_index,head=last_index+int(line_index),(last_index+int(head) if int(head)!=0 else 0)
+
+                tokenDict[line_index]={
+                    "index": line_index,
+                    "word": word,
+                    "pos": tag,
+                    "lac_pos": tagged[line_index-1]['type'],
+                    "characterOffsetBegin": int(tagged[line_index-1]['start']),
+                    "characterOffsetEnd": int(tagged[line_index-1]['start']) + int(tagged[line_index-1]['length']) - 1,
+                    "ref": {
+                        "dep": rel,
+                        "governor": head,
+                        "governorGloss": "",
+                        "dependentGloss": word
+                    }
+                }
+        last_index=line_index
+
+    tokenDict[0]={"word":"[ROOT]","ref":{"governorGloss":"","governor":0}}
+    for tokenIndex in tokenDict:
+        tokenDict[tokenIndex]['ref']["governorGloss"]=tokenDict[tokenDict[tokenIndex]['ref']["governor"]]['word']
+
+    return tokenDict
+
+def lac_cut(article,port=18080):
+    result = urlopen("http://127.0.0.1:%d/lac"%port,
                      urlencode({"passwd": 'rq2j3fja9phwdfn2l3famsdoi1234t2143ghdsnwsqety56i',
                                 "sentence": article}).encode('utf8')).read().decode('utf8')
 
@@ -144,7 +203,7 @@ def lac_cut(article):
     a=[]
     for word in words:
         word = word.split(" ")
-
+        if len(word)!=4:continue
         a.append({"word": word[0], "type": word[1], "start": word[2], "length": word[3]})
 
     return a

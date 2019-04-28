@@ -83,6 +83,7 @@ def jieba_cut_sentences(article):
 def run_parser(limit=5,skip=1,num=0,name='result',write_file=True):
     g = line_generator("final_all_data/restData/rest_data.json")
     parser=stanford.StanfordParser(path_to_jar=PARSER_PATH,path_to_models_jar=CHN_MODEL_PATH,model_path=PCFG_PATH)
+    pparser=stanford.StanfordDependencyParser()
     # parser=corenlp.CoreNLPParser(url="http://localhost:9001")
     with open(name+str(num),'w') as output:
 
