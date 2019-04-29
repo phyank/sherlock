@@ -8,7 +8,9 @@ from nltk.tree import Tree
 from definitions import *
 from relation_walker import *
 
+USE="STANFORD"
 
+VERBOSE=False
 
 def run_draw(sentence_repr):
     Tree.fromstring(sentence_repr).draw()
@@ -16,11 +18,11 @@ def run_draw(sentence_repr):
 def manual_tagger(draw_tree=False):
     g = line_generator("final_all_data/first_stage/train.json")
     try:
-        of=open("tagged.json","r")
+        of=open("tagged.json","r" ,encoding='utf8')
     except:
         with open("tagged.json","w"):
             pass
-        of = open("tagged.json", "r")
+        of = open("tagged.json", "r",encoding='utf8')
 
     train_pattern_classifier()
 
@@ -47,7 +49,7 @@ def manual_tagger(draw_tree=False):
         for pattern in clfsb64:
             clfs[pattern]=pickle.loads(base64.b64decode(clfsb64[pattern].encode('ascii')))
 
-        of = open("tagged.json", "a")
+        of = open("tagged.json", "a",encoding='utf8')
         articleJSON = json.loads(g.__next__())
         assert articleJSON!=last
         last=articleJSON
@@ -67,49 +69,60 @@ def manual_tagger(draw_tree=False):
         for word in wordlist:
             lac_result[i]=word
             i+=1
-        sentences=call_api(tokenized_repr(wordlist))['sentences']
+        if USE=="CORENLP":
+            sentences=call_api(tokenized_repr(wordlist))
+        else:# USE=="STANFORD":
+            sentences=[]
+            sentence=[]
+            sentenceIndex=0
+            for w in wordlist:
+                sentence.append(w)
+                if w['word'] in "。？！":
+                    sentences.append(new_sentence_repr(index=sentenceIndex,
+                                                       tokenDict=call_stanford(sentence)))
+                    sentence=[]
         # print("sentences")
         # print(sentences)
 
         articleJSON['sentences']=sentences
 
-        lac_result_gen=(i for i in wordlist)
         for sentence in sentences:
-            # print(sentence)
-            tokenDict={0:{"word":"ROOT"}}
-            for k in special:
-                tokenDict[special[k]]={"word":k}
-            for k in default_character:
-                tokenDict[default_character[k]]={"word":k}
+            ranked_tokens=sentence['tokens']
 
-            commas = set()
-            for word in sentence['tokens']:
-                lac=lac_result_gen.__next__()
-                assert lac['word']==word['word']
-                word['lac_pos']=lac['type']
-                tokenDict[word['index']]=word
+            for k in special_r:
+                ranked_tokens[str(k)] = new_token(index=str(k), word=special_r[k], pos=None, lac_pos=None, dep=None,
+                                              head=None, begin=None, end=None)
 
-                if word['word'] in ",，；;、": commas.add(word['index'])
-
-            rankingDict = {}
-            for word in sentence['enhancedPlusPlusDependencies']:
-                tokenDict[word['dependent']]['ref']=word
-                rankingDict[word['dependent']] = word
-                idxs=sorted(rankingDict)
-
-            ranked_tokens = make_ranked_token_dict(sentence['tokens'], reverse=False)
-
+            commas=set()
+            last_index='0'
             for wordidx in ranked_tokens:
-                word=ranked_tokens[wordidx]['ref']
-                if word['governor']!=0 and tokenDict[word['governor']]['pos'] in ("NN","NR") and tokenDict[word['dependent']]['pos'] not in ("PU"):
-                    tokenDict[word['governor']]['ref']['dependentGloss']= \
-                    word['dependentGloss']+"|"+tokenDict[word['governor']]['ref']['dependentGloss']
-                    # sentence['enhancedPlusPlusDependencies'].remove(word)
+                if int(wordidx) > 0:##build prefix
+                    word=ranked_tokens[wordidx]
+                    # print(ranked_tokens.keys())
+                    try:
+                        if int(word['head'])>0 and ranked_tokens[word['head']]['pos'] in ("NN","NR") and word['pos'] not in ("PU"):
+                            ranked_tokens[word['head']]['prefix']= \
+                            word['word']+"|"+ranked_tokens[word['head']]['prefix']
+                    except KeyError:
+                        print("head not found:word %s head %s"%(word['word'],word['head']))
+                        continue
+                        # sentence['enhancedPlusPlusDependencies'].remove(word)
 
-            if draw_tree:
-                async_run_draw(sentence['parse'])
+                if int(wordidx)-int(last_index)>1:
+                    commas.update(map(lambda x:str(x),range(int(last_index)+1,int(wordidx)))) #for conll2007 output no commas in dict
 
+                if ranked_tokens[wordidx]['word'] in ",，；;、":
+                    commas.add(ranked_tokens[wordidx]['index'])# for corenlp server
+
+                last_index=wordidx
+
+
+            # if draw_tree:
+            #     async_run_draw(sentence['parse'])
+            # print(patterns)
             auto_relations0=find_relation_by_pattern(patterns,ranked_tokens,print_result=False)
+
+            # print("auto0",auto_relations0)
 
             auto_relations=[]
             for r in auto_relations0:
@@ -124,26 +137,38 @@ def manual_tagger(draw_tree=False):
                 else:
                     max_idx = max((r[k]['idx'] for k in r if ((k not in ("pattern", "id")) and ('idx' in r[k]))))
                     min_idx = min((r[k]['idx'] for k in r if ((k not in ("pattern", "id")) and ('idx' in r[k]))))
+
                     has_comma = False
                     for comma in commas:
-                        if comma > min_idx and comma < max_idx:
+                        if int(comma) > int(min_idx) and int(comma) < int(max_idx):
                             has_comma = True
                             break
-                    result=clf.predict(np.ndarray(shape=(1,7),dtype='int',buffer=np.array((pos2i(tokenDict[r['a']['idx']]['lac_pos']),
-                         pos2i(tokenDict[r['r']['idx']]['lac_pos'] if 'idx' in r['r'] else "None"),
-                         pos2i(tokenDict[r['b']['idx']]['lac_pos']),
-                         abs(r['r']['idx'] - r['a']['idx']) if 'idx' in r['r'] and r['r']['idx'] > 0 else 0,
-                         abs(r['b']['idx'] - r['r']['idx']) if 'idx' in r['r'] and r['r']['idx'] > 0 else 0,
-                         abs(r['b']['idx'] - r['a']['idx']),
+
+                    result=clf.predict(np.ndarray(shape=(1,7),dtype='int',buffer=np.array((pos2i(ranked_tokens[r['a']['idx']]['lac_pos']),
+                         pos2i(ranked_tokens[r['r']['idx']]['lac_pos'] if 'idx' in r['r'] else "None"),
+                         pos2i(ranked_tokens[r['b']['idx']]['lac_pos']),
+                         abs(int(r['r']['idx']) - int(r['a']['idx'])) if 'idx' in r['r'] and int(r['r']['idx']) > 0 else 0,
+                         abs(int(r['b']['idx']) - int(r['r']['idx'])) if 'idx' in r['r'] and int(r['r']['idx']) > 0 else 0,
+                         abs(int(r['b']['idx']) - int(r['a']['idx'])),
                          comma_marker["comma" if has_comma else "no_comma"]))))[0]
                     if result==1:
                         auto_relations.append(r)
                     else:
                         print("flitered %s %s %s"%(r['a']['w'],r['r']['w'],r['b']['w']))
+                        print((pos2i(ranked_tokens[r['a']['idx']]['lac_pos']),
+                         pos2i(ranked_tokens[r['r']['idx']]['lac_pos'] if 'idx' in r['r'] else "None"),
+                         pos2i(ranked_tokens[r['b']['idx']]['lac_pos']),
+                         abs(int(r['r']['idx']) - int(r['a']['idx'])) if 'idx' in r['r'] and int(r['r']['idx']) > 0 else 0,
+                         abs(int(r['b']['idx']) - int(r['r']['idx'])) if 'idx' in r['r'] and int(r['r']['idx']) > 0 else 0,
+                         abs(int(r['b']['idx']) - int(r['a']['idx'])),
+                         comma_marker["comma" if has_comma else "no_comma"]))
 
-            print(" ".join(map(lambda x: ("%s(%d%s%s->%s)" % (
-            x['dependentGloss'], x['dependent'], tokenDict[x['dependent']]['pos'], tokenDict[x['dependent']]['lac_pos'],
-            tokenDict[x['governor']]['word'])), [rankingDict[idx] for idx in idxs])))
+            wordFormatted=[]
+            for x in [ranked_tokens[idx] for idx in ranked_tokens if int(idx)>0]:
+                wordFormatted.append(make_word_repr(x,ranked_tokens))
+            print("".join(wordFormatted))
+
+
 
             relations=[]
 
@@ -156,18 +181,22 @@ def manual_tagger(draw_tree=False):
                     except:
                         print("Aborted")
                         continue
+                r=str(r)
                 try:
                     a, b = possible['a']['idx'], possible['b']['idx']
                     if a in default_character:
-                        a = default_character[a]
+                        a = str(default_character[a])
                     else:
-                        a = int(possible['a']['idx'])
+                        a = (possible['a']['idx'])
                     if b in default_character:
-                        b = default_character[b]
+                        b = str(default_character[b])
                     else:
-                        b = int(possible['b']['idx'])
+                        b = (possible['b']['idx'])
                     confirm = input(
-                        "pattern %s > %s,%s,%s?(Yes):" % (possible['pattern'],tokenDict[a]['word'], tokenDict[r]['word'], tokenDict[b]['word']))
+                        "pattern %s > %s,%s,%s?(Yes):" % (possible['pattern'],
+                                                          ranked_tokens[a]['word'],
+                                                          ranked_tokens[r]['word'],
+                                                          ranked_tokens[b]['word']))
                 except Exception as e:
                     print(e.__class__.__name__)
                     print(traceback.format_exc())
@@ -181,10 +210,13 @@ def manual_tagger(draw_tree=False):
                         continue
 
             while True:
-                print(" ".join(map(lambda x: ("%s(%d%s%s->%s)" % (
-                x['dependentGloss'], x['dependent'], tokenDict[x['dependent']]['pos'],
-                tokenDict[x['dependent']]['lac_pos'], tokenDict[x['governor']]['word'])),
-                                   [rankingDict[idx] for idx in idxs])))
+                print(" ".join(map(lambda x: ("%s(%s%s%s->%s)" % (
+                                x['word'],
+                                x['index'],
+                                x['pos'],
+                                x['lac_pos'],
+                                ranked_tokens[x['head']]['word'] if x['head'] in ranked_tokens else "PUNC")),
+                (ranked_tokens[idx] for idx in ranked_tokens if int(idx)>0))))
 
                 relation=input("[no.%d]relation(a,r,b)>"%index)
                 if not relation:
@@ -204,17 +236,19 @@ def manual_tagger(draw_tree=False):
                         except:
                             print("Aborted")
                             continue
+
+                    r=str(r)
                     try:
                         a,b=relation[0],relation[2]
                         if a in default_character:
                             a=default_character[a]
-                        else:
-                            a=int(relation[0])
+
                         if b in default_character:
                             b=default_character[b]
-                        else:
-                            b=int(relation[2])
-                        confirm=input("%s,%s,%s?(Yes):" % (tokenDict[a]['word'], tokenDict[r]['word'], tokenDict[b]['word']))
+
+                        confirm=input("%s,%s,%s?(Yes):" % (ranked_tokens[a]['word'],
+                                                           ranked_tokens[r]['word'],
+                                                           ranked_tokens[b]['word']))
                     except Exception as e:
                         print(e.__class__.__name__)
                         print(traceback.format_exc())
@@ -226,17 +260,15 @@ def manual_tagger(draw_tree=False):
                         else:
                             print("Aborted")
                             continue
-            for word in sentence['enhancedPlusPlusDependencies']:
-                newTokenDict=deepcopy(tokenDict[word['dependent']])
-                del newTokenDict['ref']
-                word.update(newTokenDict)
 
             for a,r,b in relations:
-                print("%s,%s,%s"%(tokenDict[a]['word'],tokenDict[r]['word'],tokenDict[b]['word']))
+                print("%s,%s,%s"%(ranked_tokens[a]['word'],
+                                  ranked_tokens[r]['word'],
+                                  ranked_tokens[b]['word']))
             sentence['manual_relations']=relations
             final_sentences.append(sentence)
         print(final_sentences)
-        articleJSON['processed_sentences']=final_sentences
+        articleJSON['sentences']=final_sentences
         of.write(json.dumps(articleJSON,ensure_ascii=False))
         of.write("\n")
         of.close()

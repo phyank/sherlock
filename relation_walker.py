@@ -7,6 +7,8 @@ from nltk.tree import Tree
 import numpy as np
 from sklearn.naive_bayes import MultinomialNB,ComplementNB
 
+PATTERN_EXTRACTION_MIN_FREQ=5
+
 class Impossible(Exception):
     pass
 
@@ -39,17 +41,7 @@ def tree_to_string(node,dep_name="ROOT"):
         childs_literal += tree_to_string(edge.dst,edge.name)
     return "(%s %s)"%(dep_name+":"+node.name+node.addition,childs_literal)
 
-def first(s):
-    for i in s:
-        return i
 
-def first_N(s,n=1):
-    result=[]
-    for i in s:
-        result.append(i)
-        if len(result)==n:
-            break
-    return result
 
 def link_str(s,a,direction=RIGHT):
     if direction is RIGHT:
@@ -143,146 +135,118 @@ def find_path_in_tree2(root,a_addition,b_addition,direction=RIGHT):
         return "","",0
 
 def get_words_relations(a,r,b,tokenDict,final):
-    if a>=0 and b>=0:
+    if int(a)>=0 and int(b)>=0:
         nodes={}
 
         nodes[0]=Node(0,"ROOT","ROOT")
 
         all_edges={}
 
-        token=tokenDict[a]
+        a,r,b=str(a),str(r),str(b)
 
-        if a not in nodes:
-            nodes[a]=Node(a,token['word'],token['ref']['fullname'])
-        current_token_node=nodes[a]
-        current_token=token
-        current_token_node.addition="a"
+        for i,iname in ((a,"a"),(b,"b"),(r,"r")):
 
-        while current_token['ref']['governor']>0:
-            if current_token['ref']['governor'] not in nodes:
-                father_token=tokenDict[current_token['ref']['governor']]
-                father_token_node=Node(father_token['index'],father_token['word'],father_token['ref']['fullname'])
-                nodes[current_token['ref']['governor']]=father_token_node
-            else:
-                father_token=tokenDict[current_token['ref']['governor']]
-                father_token_node=nodes[current_token['ref']['governor']]
+            if int(i)<0:
+                assert iname=="r"
+                continue
+            try:
+                token=tokenDict[str(i)]# json make int to str
+            except KeyError:
+                print("WARNING: Missing key %s in %s"%(i," ".join(map(lambda x:tokenDict[x]['word'],(k for k in [ k for k in tokenDict.keys()][:min(len(tokenDict.keys()),10)])))))
+                print("1(target %s,%s,%s)"%(a,r,b))
+                return
+            if i not in nodes:
+                nodes[i]=Node(i,token['word'],token['prefix']+token['word'])
+            current_token_node=nodes[i]
+            current_token=token
+            current_token_node.addition=iname
 
-            if father_token_node.name+current_token['ref']['dep']+current_token_node.name not in all_edges:
-                all_edges[father_token_node.name+current_token['ref']['dep']+current_token_node.name]=\
-                    Edge(father_token_node, current_token['ref']['dep'], current_token_node)
-            current_token, current_token_node = father_token, father_token_node
+            while int(current_token['head'])>0:
+                if current_token['head'] not in nodes:
+                    try:
+                        father_token=tokenDict[current_token['head']]
+                    except KeyError as e:
+                        print("WARNING: Missing key %s in %s" % (current_token['head'], " ".join(map(lambda x: tokenDict[x]['word'],
+                                                                                 (k for k in
+                                                                                  [k for k in tokenDict.keys()][
+                                                                                  :min(len(tokenDict.keys()), 10)])))))
+                        print("(target %s,%s,%s)" % (a, r, b))
+                        return
 
-        if current_token['ref']['governor']==0:
-            father_token_node = nodes[0]
-            if father_token_node.name + current_token['ref']['dep'] + current_token_node.name not in all_edges:
-                all_edges[father_token_node.name + current_token['ref']['dep'] + current_token_node.name] = \
-                    Edge(father_token_node, current_token['ref']['dep'], current_token_node)
+                    father_token_node=Node(father_token['index'],father_token['word'],father_token['prefix']+father_token['word'])
+                    nodes[father_token['index']]=father_token_node
+                else:
+                    try:
+                        father_token=tokenDict[current_token['head']]
+                    except KeyError:
+                        print("WARNING: Missing key %s in %s" % (current_token['head'], " ".join(map(lambda x: tokenDict[x]['word'],
+                                                                                 (k for k in
+                                                                                  [k for k in tokenDict.keys()][
+                                                                                  :min(len(tokenDict.keys()), 10)])))))
+                        print("(3target %s,%s,%s)" % (a, r, b))
+                        return
+                    father_token_node=nodes[father_token['index']]
 
-        token = tokenDict[b]
+                if father_token_node.name+current_token['dep']+current_token_node.name not in all_edges:
+                    all_edges[father_token_node.name+current_token['dep']+current_token_node.name]=\
+                        Edge(father_token_node, current_token['dep'], current_token_node)
+                current_token, current_token_node = father_token, father_token_node
 
-        # print(token['ref']['fullname'])
-        if b not in nodes:
-            nodes[b] = Node(b, token['word'], token['ref']['fullname'])
-        current_token_node = nodes[b]
-        current_token = token
-        current_token_node.addition = "b"
+            if current_token['head']=='0':
+                father_token_node = nodes[0]
+                if father_token_node.name + current_token['dep'] + current_token_node.name not in all_edges:
+                    all_edges[father_token_node.name + current_token['dep'] + current_token_node.name] = \
+                        Edge(father_token_node, current_token['dep'], current_token_node)
 
-        while current_token['ref']['governor'] > 0:
-            if current_token['ref']['governor'] not in nodes:
-                father_token = tokenDict[current_token['ref']['governor']]
-                father_token_node = Node(father_token['index'], father_token['word'], father_token['ref']['fullname'])
-                nodes[current_token['ref']['governor']] = father_token_node
-            else:
-                father_token = tokenDict[current_token['ref']['governor']]
-                father_token_node = nodes[current_token['ref']['governor']]
-
-            if father_token_node.name + current_token['ref']['dep'] + current_token_node.name not in all_edges:
-                all_edges[father_token_node.name + current_token['ref']['dep'] + current_token_node.name] = \
-                    Edge(father_token_node, current_token['ref']['dep'], current_token_node)
-
-            # print("(%s)<-[%s]-(%s)"%(father_token_node.fullname, current_token['ref']['dep'], current_token_node.fullname))
-            current_token, current_token_node = father_token, father_token_node
-
-        if current_token['ref']['governor'] == 0:
-            father_token_node = nodes[0]
-            if father_token_node.name + current_token['ref']['dep'] + current_token_node.name not in all_edges:
-                all_edges[father_token_node.name + current_token['ref']['dep'] + current_token_node.name] = \
-                    Edge(father_token_node, current_token['ref']['dep'], current_token_node)
-
-        if r>0:
-            if r not in nodes:
-                nodes[r] = Node(r, token['word'], token['ref']['fullname'])
-                current_token_node = nodes[r]
-                current_token = token
-                current_token_node.addition = "r"
-
-                while current_token['ref']['governor'] > 0:
-                    if current_token['ref']['governor'] not in nodes:
-                        father_token = tokenDict[current_token['ref']['governor']]
-                        father_token_node = Node(father_token['index'], father_token['word'],
-                                                 father_token['ref']['fullname'])
-                        nodes[current_token['ref']['governor']] = father_token_node
-                    else:
-                        father_token = tokenDict[current_token['ref']['governor']]
-                        father_token_node = nodes[current_token['ref']['governor']]
-
-                    if father_token_node.name + current_token['ref']['dep'] + current_token_node.name not in all_edges:
-                        all_edges[father_token_node.name + current_token['ref']['dep'] + current_token_node.name] = \
-                            Edge(father_token_node, current_token['ref']['dep'], current_token_node)
-
-                    # print("(%s)<-[%s]-(%s)"%(father_token_node.fullname, current_token['ref']['dep'], current_token_node.fullname))
-                    current_token, current_token_node = father_token, father_token_node
-
-                if current_token['ref']['governor'] == 0:
-                    father_token_node = nodes[0]
-                    if father_token_node.name + current_token['ref']['dep'] + current_token_node.name not in all_edges:
-                        all_edges[father_token_node.name + current_token['ref']['dep'] + current_token_node.name] = \
-                            Edge(father_token_node, current_token['ref']['dep'], current_token_node)
-            else:
-                nodes[r].addition="r"
-        else:
-            pass
 
         root = nodes[0]
-        if r<0:
+        if int(r)<0: # R(A,B)
             _,path_left,hit=find_path_in_tree2(root,"a","b",direction=LEFT)
             _, path_right, hit = find_path_in_tree2(root, "a", "b", direction=RIGHT)
             for path in (path_left,path_right):
-                dd="%s ?%s"%(path,special_r[r])
+                patternDescriptor="%s ?%s"%(path,special_r[int(r)])
                 found=False
                 try:
-                    final[dd]+=1
+                    final[patternDescriptor]+=1
                 except:
                     continue
                 else:
                     found=True
                     break
-            if not found:final[dd]=1
+            if not found:final[patternDescriptor]=1 #new pattern
 
-        else:
+        else:# R (A,R,B)
             _,path1_left,hit1=find_path_in_tree2(root,"a","r",direction=LEFT)
             _, path1_right, hit1 = find_path_in_tree2(root, "a", "r",direction=RIGHT)
+            assert (path1_left and path1_right) or not (path1_left or path1_right)
+            if not path1_left:return
+
             _,path2_left,hit2=find_path_in_tree2(root,"r","b",direction=LEFT)
             _, path2_right, hit2 = find_path_in_tree2(root, "r", "b", direction=RIGHT)
+            assert (path1_left and path1_right) or not (path1_left or path1_right)
+            if not path2_left: return
             path1=[path1_left,path1_right]
             path2=[path2_left,path2_right]
 
+            patternDescriptor="NO PATTERN"
             found=False
             for p1 in path1:
                 for p2 in path2:
 
-                    dd=("%s , %s"%(p1,p2))
+                    patternDescriptor=("%s,%s"%(p1,p2))
 
                     try:
-                        final[dd]+=1
+                        final[patternDescriptor]+=1
                     except:
                         continue
                     else:
                         found=True
                         break
                 if found:break
+
+            assert patternDescriptor!= "NO PATTERN"
             if not found:
-                final[dd]=1
+                final[patternDescriptor]=1 #new pattern
 
     elif a<0:
         pass
@@ -292,6 +256,10 @@ def get_words_relations(a,r,b,tokenDict,final):
         raise Impossible
 
 def make_ranked_token_dict(tokens,reverse=True):
+    if isinstance(tokens,dict):
+        makeFrom="dict"
+    else:
+        makeFrom="list"
     tokenDict = {0: {"word": "ROOT"}}
     for k in special:
         tokenDict[special[k]] = {"word": k}
@@ -299,7 +267,12 @@ def make_ranked_token_dict(tokens,reverse=True):
         tokenDict[default_character[k]] = {"word": k}
 
     for word in tokens:
-        tokenDict[word['index']] = word
+        if makeFrom=="dict":word=tokens[word]
+        try:
+            tokenDict[word['index']] = word
+        except:
+            print(word)
+            raise Exception
         word['ref']['fullname'] = \
             word['word']
 
@@ -310,12 +283,12 @@ def make_ranked_token_dict(tokens,reverse=True):
     print(" ".join((ranked_tokens[i]['word'] for i in ranked_tokens)))
     for word_index in ranked_tokens:
         word = ranked_tokens[word_index]
-        if word['ref']['governor'] != 0 and tokenDict[word['ref']['governor']]['pos'] in ("NN", "NR") and \
+        if word['head'] != 0 and tokenDict[word['head']]['pos'] in ("NN", "NR") and \
                 tokenDict[word['ref']['dependent']]['pos'] not in ("PU"):
             # print(word)
-            # print("%s PING %s"%(tokenDict[word['ref']['governor']]['ref']['fullname'],word['word']))
-            tokenDict[word['ref']['governor']]['ref']['fullname'] = \
-                word['word'] + "|" + tokenDict[word['ref']['governor']]['ref']['fullname']
+            # print("%s PING %s"%(tokenDict[word['head']]['ref']['fullname'],word['word']))
+            tokenDict[word['head']]['ref']['fullname'] = \
+                word['word'] + "|" + tokenDict[word['head']]['ref']['fullname']
     return ranked_tokens
 
 def no_distance(x):
@@ -329,15 +302,21 @@ def train_pattern_classifier():
         for i in patterns0:
             if i['frequency'] > 2:
                 patterns.append(i['pattern'])
+                # print("Append pattern %s"%i['pattern'])
     training_set_by_pattern={}
-    for article in line_generator("tagged.json", encoding='gbk'):
-        articleDict = json.loads(article)
+    for article in line_generator("tagged.json", encoding='utf8'):
+        try:
+            articleDict = json.loads(article)
+        except:
+            print(repr(article))
+            raise Exception
 
         lastSentenceSubject = None
         lastSentenceMainVerb = None
         lastSentenceTime = None
-        for sentence in articleDict['processed_sentences']:
-            ranked_tokens = make_ranked_token_dict(sentence['tokens'],reverse=False)
+        for sentence in articleDict['sentences']:
+            ranked_tokens = sentence['tokens']
+
 
             this_training_set_by_pattern=generate_training_set(patterns, ranked_tokens, sentence['manual_relations'])
             for pattern in this_training_set_by_pattern:
@@ -348,6 +327,8 @@ def train_pattern_classifier():
                     training_set_by_pattern[pattern]={'data':this_training_set_by_pattern[pattern][0],
                                                       'label':this_training_set_by_pattern[pattern][1]}
     classifiers={}
+
+    # print("training set",training_set_by_pattern)
     for aPattern in training_set_by_pattern:
         data0,label=training_set_by_pattern[aPattern]['data'],training_set_by_pattern[aPattern]['label']
         if not data0 or len(data0)<PATTERN_MIN_FREQ:continue
@@ -378,16 +359,17 @@ def extract_dep_patterns(to_write=False):
 
         patterns = []
         for i in patterns0:
-            if i['frequency'] > 2:
+            if i['frequency'] > PATTERN_MIN_FREQ:
                 patterns.append(i['pattern'])
-    for article in line_generator("tagged.json", encoding='gbk'):
-        articleDict = json.loads(article)
+    for article in line_generator("tagged.json", encoding='utf8'):
+        try:
+            articleDict = json.loads(article)
+        except:
+            print(repr(article))
+            raise Exception
 
-        # lastSentenceSubject = None
-        # lastSentenceMainVerb = None
-        # lastSentenceTime = None
-        for sentence in articleDict['processed_sentences']:
-            ranked_tokens = make_ranked_token_dict(sentence['tokens'])
+        for sentence in articleDict['sentences']:
+            ranked_tokens=sentence['tokens']
 
             # train_pattern_classifier(patterns[1], ranked_tokens, sentence['manual_relations'])
             # testtest = find_relation_by_pattern(patterns, ranked_tokens)
@@ -582,7 +564,8 @@ def generate_training_set(patterns,tokenDict,manual_relations):
     nodes = {}
     nodes[0] = Node(0, "ROOT", "ROOT")
     all_edges = {}
-    tokenDict[-100]={'lac_pos':"None","word":"None","ref":{"fullname":"None","governor":0,"dep":"None"}}
+    tokenDict[-100]=new_token(index='-100',word="None",pos=None,lac_pos=None,dep=None,head='0',begin=None,end=None)
+    #{'lac_pos':"None","word":"None","ref":{"fullname":"None","governor":0,"dep":"None"}}
 
     commas=set()
 
@@ -594,32 +577,34 @@ def generate_training_set(patterns,tokenDict,manual_relations):
         if token['word'] in ",，；;、":commas.add(a)
 
         if a not in nodes:
-            nodes[a] = Node(a, token['word'], token['ref']['fullname'])
+            nodes[a] = Node(a, token['word'], token['prefix']+token['word'])
         current_token_node = nodes[a]
         current_token = token
         current_token_node.addition = "a"
 
-        while 'ref' in current_token and current_token['ref']['governor'] > 0:
-            if current_token['ref']['governor'] not in nodes:
-                father_token = tokenDict[current_token['ref']['governor']]
-                father_token_node = Node(father_token['index'], father_token['word'], father_token['ref']['fullname'])
-                nodes[current_token['ref']['governor']] = father_token_node
+        while current_token['head'] in tokenDict and int(current_token['head']) > 0:
+            if current_token['head'] not in nodes:
+                father_token = tokenDict[current_token['head']]
+                father_token_node = Node(father_token['index'], father_token['word'], father_token['prefix']+father_token['word'])
+                nodes[current_token['head']] = father_token_node
             else:
-                father_token = tokenDict[current_token['ref']['governor']]
-                father_token_node = nodes[current_token['ref']['governor']]
+                father_token = tokenDict[current_token['head']]
+                father_token_node = nodes[current_token['head']]
 
-            if father_token_node.name + current_token['ref']['dep'] + current_token_node.name not in all_edges:
-                all_edges[father_token_node.name + current_token['ref']['dep'] + current_token_node.name] = \
-                    Edge(father_token_node, current_token['ref']['dep'], current_token_node)
+            if father_token_node.name + current_token['dep'] + current_token_node.name not in all_edges:
+                all_edges[father_token_node.name + current_token['dep'] + current_token_node.name] = \
+                    Edge(father_token_node, current_token['dep'], current_token_node)
             current_token, current_token_node = father_token, father_token_node
 
-        if 'ref' in current_token and current_token['ref']['governor'] == 0:
+        if current_token['head'] == 0:
             father_token_node = nodes[0]
-            if father_token_node.name + current_token['ref']['dep'] + current_token_node.name not in all_edges:
-                all_edges[father_token_node.name + current_token['ref']['dep'] + current_token_node.name] = \
-                    Edge(father_token_node, current_token['ref']['dep'], current_token_node)
+            if father_token_node.name + current_token['dep'] + current_token_node.name not in all_edges:
+                all_edges[father_token_node.name + current_token['dep'] + current_token_node.name] = \
+                    Edge(father_token_node, current_token['dep'], current_token_node)
 
     # async_run_draw(tree_to_string(nodes[0]),daemon=False)
+    pattern=None
+    pattern1,pattern0=None,None
     training_data_by_pattern={}
     for pattern00 in patterns:
         relations = []
@@ -657,31 +642,41 @@ def generate_training_set(patterns,tokenDict,manual_relations):
 
         labeled_relations=set()
         for a,r,b in manual_relations:
-            labeled_relations.add("%d,%d,%d"%(a,r if r >0 else -100,b))
+            labeled_relations.add("%s,%s,%s"%(a,r if int(r) >0 else -100,b))
 
         data=[]
         label=[]
 
         for r in relations:
             # print(r)
-            max_idx=max((r[k]['idx'] for k in r if k not in  ("pattern","id")))
-            min_idx=min((r[k]['idx'] for k in r if k not in  ("pattern","id")))
+            max_idx=max((int(r[k]['idx']) for k in r if k not in  ("pattern","id")))
+            min_idx=min((int(r[k]['idx']) for k in r if k not in  ("pattern","id")))
             has_comma=False
             for comma in commas:
-                if comma>min_idx and comma<max_idx:
+                if int(comma)>min_idx and int(comma)<max_idx:
                     has_comma=True
                     break
-            data.append((pos2i(tokenDict[r['a']['idx']]['lac_pos']),
+            thisTraining=(pos2i(tokenDict[r['a']['idx']]['lac_pos']),
                          pos2i(tokenDict[r['r']['idx']]['lac_pos']),
                          pos2i(tokenDict[r['b']['idx']]['lac_pos']),
-                         abs(r['r']['idx']-r['a']['idx']) if r['r']['idx']>0 else 0,
-                         abs(r['b']['idx']-r['r']['idx']) if r['r']['idx']>0 else 0,
-                         abs(r['b']['idx']-r['a']['idx']),
-                         comma_marker["comma" if has_comma else "no_comma"]))
-            if "%d,%d,%d"%(r['a']['idx'],r['r']['idx'],r['b']['idx']) in labeled_relations:
+                         abs(int(r['r']['idx'])-int(r['a']['idx'])) if int(r['r']['idx'])>0 else 0,
+                         abs(int(r['b']['idx'])-int(r['r']['idx'])) if int(r['r']['idx'])>0 else 0,
+                         abs(int(r['b']['idx'])-int(r['a']['idx'])),
+                         comma_marker["comma" if has_comma else "no_comma"])
+            # if r['pattern'] and 'app' in r['pattern']:
+                # print("add training data:")
+                # print(r)
+                # print(thisTraining)
+            # if pos2i(tokenDict[r['r']['idx']]['lac_pos'])==99:print("pos",tokenDict[r['r']['idx']]['lac_pos'])
+            data.append(thisTraining)
+            if "%s,%s,%s"%(r['a']['idx'],r['r']['idx'],r['b']['idx']) in labeled_relations:
                 label.append(CLASS["Y"])
+                # if r['pattern'] and 'app' in r['pattern']:
+                #     print("YEAH")
             else:
                 # print("%d,%d,%d"%(r['a']['idx'],r['r']['idx'],r['b']['idx']) ,"not in ",labeled_relations)
+                # if r['pattern'] and 'app' in r['pattern']:
+                #     print("NO")
                 label.append(CLASS["N"])
             # print(r['a']['w'],tokenDict[r['a']['idx']]['lac_pos'],r['r']['w'],r['b']['w'],tokenDict[r['b']['idx']]['lac_pos'],"  ",r['pattern'])
         # for i in range(len(data)):
@@ -689,38 +684,50 @@ def generate_training_set(patterns,tokenDict,manual_relations):
         training_data_by_pattern[pattern00]=(data,label)
     return training_data_by_pattern
 
+# @print_local_when_exception
 def find_relation_by_pattern(patterns,tokenDict,print_result=True):
     nodes = {}
-    nodes[0] = Node(0, "ROOT", "ROOT")
+    nodes['0'] = Node('0', "ROOT", "ROOT")
     all_edges = {}
     for a in tokenDict:
+        if int(a)<0:continue
+
         token = tokenDict[a]
 
         if a not in nodes:
-            nodes[a] = Node(a, token['word'], token['ref']['fullname'])
+            nodes[a] = Node(a, token['word'], token['prefix']+token['word'] if 'ref' in token and 'fullname' in token['ref'] else token['word'])
+
         current_token_node = nodes[a]
         current_token = token
         current_token_node.addition = "a"
-
-        while current_token['ref']['governor'] > 0:
-            if current_token['ref']['governor'] not in nodes:
-                father_token = tokenDict[current_token['ref']['governor']]
-                father_token_node = Node(father_token['index'], father_token['word'], father_token['ref']['fullname'])
-                nodes[current_token['ref']['governor']] = father_token_node
+        while  current_token['head']!="None" and int(current_token['head']) > 0:
+            if current_token['head'] not in nodes:
+                try:
+                    father_token = tokenDict[current_token['head']]
+                except KeyError as e:
+                    print(e.__class__.__name__)
+                    print(e.args)
+                    print("father of %s (%s) not in tokenDict"%(current_token['word'],current_token['head']))
+                    break
+                else:
+                    father_token_node = Node(father_token['index'], father_token['word'], father_token['prefix']+father_token['word'])
+                    nodes[father_token['index']] = father_token_node
             else:
-                father_token = tokenDict[current_token['ref']['governor']]
-                father_token_node = nodes[current_token['ref']['governor']]
+                father_token = tokenDict[current_token['head']]
+                father_token_node = nodes[current_token['head']]
 
-            if father_token_node.name + current_token['ref']['dep'] + current_token_node.name not in all_edges:
-                all_edges[father_token_node.name + current_token['ref']['dep'] + current_token_node.name] = \
-                    Edge(father_token_node, current_token['ref']['dep'], current_token_node)
+            if father_token_node.name + current_token['dep'] + current_token_node.name not in all_edges:
+                all_edges[father_token_node.name + current_token['dep'] + current_token_node.name] = \
+                    Edge(father_token_node, current_token['dep'], current_token_node)
             current_token, current_token_node = father_token, father_token_node
 
-        if current_token['ref']['governor'] == 0:
-            father_token_node = nodes[0]
-            if father_token_node.name + current_token['ref']['dep'] + current_token_node.name not in all_edges:
-                all_edges[father_token_node.name + current_token['ref']['dep'] + current_token_node.name] = \
-                    Edge(father_token_node, current_token['ref']['dep'], current_token_node)
+
+        if current_token['head'] == '0':
+            father_token_node = nodes['0']
+            if father_token_node.name + current_token['dep'] + current_token_node.name not in all_edges:
+                all_edges[father_token_node.name + current_token['dep'] + current_token_node.name] = \
+                    Edge(father_token_node, current_token['dep'], current_token_node)
+
     # t=Tree.fromstring(tree_to_string(nodes[0]))
     # t.draw()
     relations=[]
@@ -736,6 +743,7 @@ def find_relation_by_pattern(patterns,tokenDict,print_result=True):
             if "?" in pattern:
                 pattern,r=pattern.split("?")
         for tokenIndex in tokenDict:
+            if int(tokenIndex)<0:continue
             if relationType==AB:
                 results=find_relation_by_pattern_token_and_tree_given(tokenIndex,pattern,nodes,tokenDict)
                 for i in results:
@@ -764,3 +772,13 @@ def find_relation_by_pattern(patterns,tokenDict,print_result=True):
 if __name__=="__main__":
     # extract_dep_patterns(to_write=True)
     train_pattern_classifier()
+    # g = line_generator('tagged.json')
+    #
+    # # of = open("tagged.json", "w", encoding='utf8')
+    #
+    # for line in g:
+    #     article = json.loads(line)
+    #     sentences = article['sentences']
+    #
+    #     for sentence in sentences:
+    #         print(find_relation_by_pattern(['(b)<-[:appos]-(a) ?is'],sentence['tokens']))
