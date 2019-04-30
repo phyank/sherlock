@@ -1,4 +1,7 @@
 requests
+tornado
 jieba
 nltk
 py2neo
+numpy
+sklearn
