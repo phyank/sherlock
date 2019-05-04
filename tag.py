@@ -7,6 +7,7 @@ from nltk.tree import Tree
 
 from definitions import *
 from relation_walker import *
+from kg import *
 
 USE="STANFORD"
 
@@ -15,7 +16,10 @@ VERBOSE=False
 def run_draw(sentence_repr):
     Tree.fromstring(sentence_repr).draw()
 
-def manual_tagger(draw_tree=False):
+def manual_tagger(draw_tree=False,add_kg=True):
+    if add_kg:
+        graph = Graph(uri="127.0.0.1:7474", auth=("neo4j", "Cion24"))
+
     g = line_generator("final_all_data/first_stage/train.json")
     try:
         of=open("tagged.json","r" ,encoding='utf8')
@@ -60,7 +64,7 @@ def manual_tagger(draw_tree=False):
 
         print("NEXT")
         # print(articleJSON)
-        wordlist = lac_cut(articleJSON["fact"].replace("\r\n","").replace("\n",""))
+        wordlist = lac_cut(articleJSON["fact"].replace("\r\n","").replace("\n",""),addr="192.168.59.141")
         # print("wordlist")
         # print(wordlist)
 
@@ -268,6 +272,9 @@ def manual_tagger(draw_tree=False):
             sentence['manual_relations']=relations
             final_sentences.append(sentence)
         print(final_sentences)
+
+        if add_kg:
+            add_case(graph,final_sentences,index)
         articleJSON['sentences']=final_sentences
         of.write(json.dumps(articleJSON,ensure_ascii=False))
         of.write("\n")

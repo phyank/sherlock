@@ -261,8 +261,8 @@ def make_word_repr(x,tokenDict):
                 x['prefix']+">>"+x['word'], x['index'], x['pos'], x['lac_pos'],
                 tokenDict[x['head']]['word'] if x['head'] in tokenDict else "PUNC"))
 
-def lac_cut(article,port=18080):
-    result = urlopen("http://127.0.0.1:%d/lac"%port,
+def lac_cut(article,addr="127.0.0.1",port=18080):
+    result = urlopen("http://%s:%d/lac"%(addr,port),
                      urlencode({"passwd": 'rq2j3fja9phwdfn2l3famsdoi1234t2143ghdsnwsqety56i',
                                 "sentence": article}).encode('utf8')).read().decode('utf8')
 
