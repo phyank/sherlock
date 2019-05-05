@@ -25,7 +25,7 @@ def run_draw(sentence_repr):
 
 def manual_tagger(draw_tree=False,add_kg=True):
     if add_kg:
-        graph = Graph(uri="127.0.0.1:7474", auth=("neo4j", "Cion24"))
+        graph = Graph(uri="localhost:7474", auth=("neo4j", "Cion24"))
 
     g = line_generator("final_all_data/first_stage/train.json")
     try:
@@ -71,7 +71,7 @@ def manual_tagger(draw_tree=False,add_kg=True):
 
         print("NEXT")
         # print(articleJSON)
-        wordlist = lac_cut(articleJSON["fact"].replace("\r\n","").replace("\n",""),addr="192.168.59.141")
+        wordlist = lac_cut(articleJSON["fact"].replace("\r\n","").replace("\n",""))
         # print("wordlist")
         # print(wordlist)
 
@@ -146,33 +146,13 @@ def manual_tagger(draw_tree=False,add_kg=True):
                     print("Pattern classifier not found : %s"%thisPattern)
                     auto_relations.append(r)
                 else:
-                    max_idx = max((r[k]['idx'] for k in r if ((k not in ("pattern", "id")) and ('idx' in r[k]))))
-                    min_idx = min((r[k]['idx'] for k in r if ((k not in ("pattern", "id")) and ('idx' in r[k]))))
-
-                    has_comma = False
-                    for comma in commas:
-                        if int(comma) > int(min_idx) and int(comma) < int(max_idx):
-                            has_comma = True
-                            break
-
-                    result=clf.predict(np.ndarray(shape=(1,7),dtype='int',buffer=np.array((pos2i(ranked_tokens[r['a']['idx']]['lac_pos']),
-                         pos2i(ranked_tokens[r['r']['idx']]['lac_pos'] if 'idx' in r['r'] else "None"),
-                         pos2i(ranked_tokens[r['b']['idx']]['lac_pos']),
-                         abs(int(r['r']['idx']) - int(r['a']['idx'])) if 'idx' in r['r'] and int(r['r']['idx']) > 0 else 0,
-                         abs(int(r['b']['idx']) - int(r['r']['idx'])) if 'idx' in r['r'] and int(r['r']['idx']) > 0 else 0,
-                         abs(int(r['b']['idx']) - int(r['a']['idx'])),
-                         comma_marker["comma" if has_comma else "no_comma"]))))[0]
+                    this_feature,n_features=make_feature(r,commas=commas,tokens=ranked_tokens)
+                    result=clf.predict(np.ndarray(shape=(1,n_features),dtype='int',buffer=np.array(this_feature)))[0]
                     if result==1:
                         auto_relations.append(r)
                     else:
                         print("flitered %s %s %s"%(r['a']['w'],r['r']['w'],r['b']['w']))
-                        print((pos2i(ranked_tokens[r['a']['idx']]['lac_pos']),
-                         pos2i(ranked_tokens[r['r']['idx']]['lac_pos'] if 'idx' in r['r'] else "None"),
-                         pos2i(ranked_tokens[r['b']['idx']]['lac_pos']),
-                         abs(int(r['r']['idx']) - int(r['a']['idx'])) if 'idx' in r['r'] and int(r['r']['idx']) > 0 else 0,
-                         abs(int(r['b']['idx']) - int(r['r']['idx'])) if 'idx' in r['r'] and int(r['r']['idx']) > 0 else 0,
-                         abs(int(r['b']['idx']) - int(r['a']['idx'])),
-                         comma_marker["comma" if has_comma else "no_comma"]))
+                        print(this_feature)
 
             wordFormatted=[]
             for x in [ranked_tokens[idx] for idx in ranked_tokens if int(idx)>0]:

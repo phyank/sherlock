@@ -167,6 +167,27 @@ def old_word_token_to_new(old):
                 "ver":"new"
         }
 
+def make_feature(relation,commas,tokens):
+    max_idx = max((int(relation[k]['idx']) for k in relation if ((k not in ("pattern", "id")) and ('idx' in relation[k]))))
+    min_idx = min((int(relation[k]['idx']) for k in relation if ((k not in ("pattern", "id")) and ('idx' in relation[k]))))
+
+    has_comma = False
+    for comma in commas:
+        if int(comma) > int(min_idx) and int(comma) < int(max_idx):
+            has_comma = True
+            break
+
+    return (pos2i(tokens[relation['a']['idx']]['lac_pos']),
+                         pos2i(tokens[relation['r']['idx']]['lac_pos'] if 'idx' in relation['r'] else "None"),
+                         pos2i(tokens[relation['b']['idx']]['lac_pos']),
+                         abs(int(relation['r']['idx']) - int(relation['a']['idx'])) if 'idx' in relation['r'] and int(relation['r']['idx']) > 0 else 0,
+                         1 if 'idx' in relation['r'] and int(relation['r']['idx']) - int(relation['a']['idx'])>0 else -1,
+                         abs(int(relation['b']['idx']) - int(relation['r']['idx'])) if 'idx' in relation['r'] and int(relation['r']['idx']) > 0 else 0,
+                         1 if 'idx' in relation['r'] and int(relation['b']['idx']) - int(relation['r']['idx']) > 0 else -1,
+                         abs(int(relation['b']['idx']) - int(relation['a']['idx'])),
+                         1 if int(relation['b']['idx']) - int(relation['a']['idx']) > 0 else -1,
+                         comma_marker["comma" if has_comma else "no_comma"]),10
+
 def print_local_when_exception(func):
     def inner(*args,**kwargs):
         try:
@@ -209,7 +230,7 @@ def async_run_draw(sentence_repr,daemon=True):
     drawThread.start()
     print("start")
 
-def call_stanford(tagged,host="http://127.0.0.1:9001/stanford"):
+def call_stanford(tagged,host="http://localhost:9001/stanford"):
     sentences=[]
     sentence = []
     tokenDict={}
@@ -261,7 +282,7 @@ def make_word_repr(x,tokenDict):
                 x['prefix']+">>"+x['word'], x['index'], x['pos'], x['lac_pos'],
                 tokenDict[x['head']]['word'] if x['head'] in tokenDict else "PUNC"))
 
-def lac_cut(article,addr="127.0.0.1",port=18080):
+def lac_cut(article,addr="localhost",port=18080):
     result = urlopen("http://%s:%d/lac"%(addr,port),
                      urlencode({"passwd": 'rq2j3fja9phwdfn2l3famsdoi1234t2143ghdsnwsqety56i',
                                 "sentence": article}).encode('utf8')).read().decode('utf8')
@@ -283,7 +304,7 @@ def tokenized_repr(wordlist):
 
 
 def lac_cut_break(article):
-    result = urlopen("http://127.0.0.1:18080/lac",
+    result = urlopen("http://localhost:18080/lac",
                      urlencode({"passwd": 'rq2j3fja9phwdfn2l3famsdoi1234t2143ghdsnwsqety56i',
                                 "sentence": article}).encode('utf8')).read().decode('utf8')
 
@@ -306,7 +327,7 @@ def lac_cut_break(article):
         yield (" ".join(map(lambda w:w['word'],sentence)))
 
 def lac_cut_pos(article):
-    result = urlopen("http://127.0.0.1:18080/lac",
+    result = urlopen("http://localhost:18080/lac",
                      urlencode({"passwd": 'rq2j3fja9phwdfn2l3famsdoi1234t2143ghdsnwsqety56i',
                                 "sentence": article}).encode('utf8')).read().decode('utf8')
 
