@@ -43,14 +43,14 @@ for article in line_generator("tagged.json", encoding='gbk'):
     lastSentenceTime = None
     index=0
 
-    for sentence in articleDict['processed_sentences']:
+    for sentence in articleDict['sentences']:
         index+=1
 
         caseName="Case%d"%index
 
         graph.run("MERGE (:LegalCase{name:'%s'})"%caseName)
 
-        tokenDict=build_token_dict(sentence)
+        tokenDict=sentence['tokens']
 
         for tokenIndex in tokenDict:
             token=tokenDict[tokenIndex]
