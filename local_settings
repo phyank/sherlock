@@ -1,0 +1,18 @@
+# local settings
+
+# neo4j settings
+
+neo4j_address localhost:7474
+neo4j_user neo4j
+neo4j_pass testneo4jtest
+
+#lac setting
+
+lac_addr localhost
+lac_port 18080
+
+# stanford parser wrapper settings
+
+corenlp_dir /home/jason/CoreNLP
+corenlp_host localhost
+corenlp_port 9001

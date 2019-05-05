@@ -13,6 +13,8 @@ USE="STANFORD"
 
 VERBOSE=False
 
+conf_dict=get_local_settings()
+
 s={
     "窃得":"盗窃",
 "窃":"盗窃",
@@ -25,7 +27,7 @@ def run_draw(sentence_repr):
 
 def manual_tagger(draw_tree=False,add_kg=True):
     if add_kg:
-        graph = Graph(uri="localhost:7474", auth=("neo4j", "Cion24"))
+        graph = Graph(uri=conf_dict['neo4j_address'], auth=(conf_dict['neo4j_user'], conf_dict['neo4j_pass']))
 
     g = line_generator("final_all_data/first_stage/train.json")
     try:
@@ -71,7 +73,9 @@ def manual_tagger(draw_tree=False,add_kg=True):
 
         print("NEXT")
         # print(articleJSON)
-        wordlist = lac_cut(articleJSON["fact"].replace("\r\n","").replace("\n",""))
+        wordlist = lac_cut(articleJSON["fact"].replace("\r\n","").replace("\n",""),
+                           addr=conf_dict['lac_addr'],
+                           port=conf_dict['lac_port'])
         # print("wordlist")
         # print(wordlist)
 
@@ -90,7 +94,7 @@ def manual_tagger(draw_tree=False,add_kg=True):
                 sentence.append(w)
                 if w['word'] in "。？！":
                     sentences.append(new_sentence_repr(index=sentenceIndex,
-                                                       tokenDict=call_stanford(sentence)))
+                                                       tokenDict=call_stanford(sentence,host="http://%s:%d/stanford"%(conf_dict['corenlp_host'],conf_dict['corenlp_port']))))
                     sentence=[]
         # print("sentences")
         # print(sentences)

@@ -167,6 +167,35 @@ def old_word_token_to_new(old):
                 "ver":"new"
         }
 
+def get_local_settings(conf="local_settings"):
+    with open(conf,"r",encoding="utf8") as cfile:
+        lines=cfile.readlines()
+
+    conf_dict={}
+
+    for line in lines:
+        idx=0
+        try:
+            while not line[idx]:idx+=1
+        except:
+            continue # empty line
+        if line[idx]=="#":
+            continue # first not-null character is #
+
+        try:
+            key,value,_=re.split("\s+",line)
+        except:
+            try:
+                key, value= re.split("\s+", line)
+            except:
+                continue #bad line
+        try:
+            conf_dict[key]=int(value)
+        except:
+            conf_dict[key]=value
+    return conf_dict
+
+
 def make_feature(relation,commas,tokens):
     max_idx = max((int(relation[k]['idx']) for k in relation if ((k not in ("pattern", "id")) and ('idx' in relation[k]))))
     min_idx = min((int(relation[k]['idx']) for k in relation if ((k not in ("pattern", "id")) and ('idx' in relation[k]))))
