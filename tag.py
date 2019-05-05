@@ -13,6 +13,13 @@ USE="STANFORD"
 
 VERBOSE=False
 
+s={
+    "窃得":"盗窃",
+"窃":"盗窃",
+"窃取":"盗窃",
+    "近亲属":"亲属"
+}
+
 def run_draw(sentence_repr):
     Tree.fromstring(sentence_repr).draw()
 
