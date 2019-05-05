@@ -5,7 +5,8 @@ from definitions import *
 
 from nltk.tree import Tree
 import numpy as np
-from sklearn.naive_bayes import MultinomialNB,ComplementNB
+from sklearn.naive_bayes import MultinomialNB,ComplementNB,GaussianNB
+from sklearn.tree import DecisionTreeClassifier
 
 PATTERN_EXTRACTION_MIN_FREQ=5
 
@@ -336,10 +337,12 @@ def train_pattern_classifier():
         for i in data0:data+=i
         # print(aPattern)
 
-        dataArray=np.ndarray(shape=(len(data0),7),dtype='int',buffer=np.array(data))
+        dataArray=np.ndarray(shape=(len(data0),len(data0[0])),dtype='int',buffer=np.array(data))
         labelArray=np.array(label)
         # print(len(dataArray), len(labelArray))
-        clf = ComplementNB()
+        # clf = ComplementNB()
+        # clf=GaussianNB()
+        clf=DecisionTreeClassifier()
         clf.fit(dataArray, labelArray)
         # print([(clf.predict(dataArray)[i],labelArray[i]) for i in range(len(labelArray))])
         count=len(dataArray)
@@ -649,25 +652,9 @@ def generate_training_set(patterns,tokenDict,manual_relations):
 
         for r in relations:
             # print(r)
-            max_idx=max((int(r[k]['idx']) for k in r if k not in  ("pattern","id")))
-            min_idx=min((int(r[k]['idx']) for k in r if k not in  ("pattern","id")))
-            has_comma=False
-            for comma in commas:
-                if int(comma)>min_idx and int(comma)<max_idx:
-                    has_comma=True
-                    break
-            thisTraining=(pos2i(tokenDict[r['a']['idx']]['lac_pos']),
-                         pos2i(tokenDict[r['r']['idx']]['lac_pos']),
-                         pos2i(tokenDict[r['b']['idx']]['lac_pos']),
-                         abs(int(r['r']['idx'])-int(r['a']['idx'])) if int(r['r']['idx'])>0 else 0,
-                         abs(int(r['b']['idx'])-int(r['r']['idx'])) if int(r['r']['idx'])>0 else 0,
-                         abs(int(r['b']['idx'])-int(r['a']['idx'])),
-                         comma_marker["comma" if has_comma else "no_comma"])
-            # if r['pattern'] and 'app' in r['pattern']:
-                # print("add training data:")
-                # print(r)
-                # print(thisTraining)
-            # if pos2i(tokenDict[r['r']['idx']]['lac_pos'])==99:print("pos",tokenDict[r['r']['idx']]['lac_pos'])
+
+            thisTraining,n_features=make_feature(r,commas=commas,tokens=tokenDict)
+
             data.append(thisTraining)
             if "%s,%s,%s"%(r['a']['idx'],r['r']['idx'],r['b']['idx']) in labeled_relations:
                 label.append(CLASS["Y"])

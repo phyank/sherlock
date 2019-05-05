@@ -7,12 +7,16 @@ from time import sleep
 
 from tornado import gen
 
+from tools import get_local_settings
+
 PASSWORD='rq2j3fja9phwdfn2l3famsdoi1234t2143ghdsnwsqety56i'
 
-CORENLP_DIR="D:\CoreNLP"
+conf_dict=get_local_settings()
 
-CMD=['java.exe',
-                  '-mx4g',
+CORENLP_DIR=conf_dict['corenlp_dir']
+
+CMD=['java',
+                  '-mx2g',
                   '-cp','*',
                   'edu.stanford.nlp.parser.lexparser.LexicalizedParser',
                   '-model', 'edu/stanford/nlp/models/lexparser/chinesePCFG.ser.gz',
@@ -208,7 +212,7 @@ if __name__=="__main__":
     print("All threads started.")
 		
     app=make_app()
-    app.listen(9001)
+    app.listen(conf_dict['corenlp_port'])
 	
     tornado.ioloop.IOLoop.current().start()
 		
