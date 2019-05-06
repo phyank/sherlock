@@ -29,8 +29,16 @@ def add_case(graph,sentences,case_index=0):
     caseName = "Case%d" % case_index
     graph.run("MERGE (:LegalCase{name:'%s'})" % caseName)
 
+    special_dict={}
+
+    for k in special_r:
+        special_dict[str(k)] = new_token(index=str(k), word=special_r[k], pos=None, lac_pos=None, dep=None, head=None,
+                                      begin=None, end=None)
+
     for sentence in sentences:
         tokenDict = sentence['tokens']
+
+        tokenDict.update(special_dict)
 
         for tokenIndex in tokenDict:
             token = tokenDict[tokenIndex]
@@ -66,7 +74,13 @@ def add_case(graph,sentences,case_index=0):
                     caseName, token['word']))
 
         for aidx,ridx,bidx in sentence['manual_relations']:
-            a, r, b = tokenDict[aidx], tokenDict[ridx], tokenDict[bidx]
+            aidx,ridx,bidx=str(aidx),str(ridx),str(bidx)
+
+            try:
+                a, r, b = tokenDict[aidx], tokenDict[ridx], tokenDict[bidx]
+            except KeyError as e:
+                print(e.__class__.__name__,e.args)
+                continue
 
             enames = {}
             for role, i in (("a", a), ("b", b)):
