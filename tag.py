@@ -135,7 +135,7 @@ def manual_tagger(draw_tree=False,add_kg=True):
             # if draw_tree:
             #     async_run_draw(sentence['parse'])
             # print(patterns)
-            auto_relations0=find_relation_by_pattern(patterns,ranked_tokens,print_result=False)
+            auto_relations0=find_relation_by_pattern(patterns,ranked_tokens,print_result=False,draw=False)
 
             # print("auto0",auto_relations0)
 

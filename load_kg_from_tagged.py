@@ -7,6 +7,14 @@ if __name__=="__main__":
 
     graph = Graph(uri=conf_dict['neo4j_address'], auth=(conf_dict['neo4j_user'], conf_dict['neo4j_pass']))
 
+    for label in ("LegalCase", "Keyword", "Location", "Person", "Organization", "Time", "Item", "Entity","Action"):
+        graph.run("CREATE INDEX ON :%s(name)" % label)
+
+    with open("critical","r",encoding="utf8") as pfile:
+        lines=pfile.readlines()
+
+    regExractor=RegExtractor(patterns=lines)
+
     index=0
     while True:
         try:
@@ -14,5 +22,7 @@ if __name__=="__main__":
         except StopIteration:
             break
         else:
-            add_case(graph, articleJSON['sentences'], index)
+
+
+            add_case(graph, articleJSON['sentences'],articleJSON['fact'], index,regExractor)
             index+=1

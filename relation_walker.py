@@ -605,7 +605,7 @@ def generate_training_set(patterns,tokenDict,manual_relations):
                 all_edges[father_token_node.name + current_token['dep'] + current_token_node.name] = \
                     Edge(father_token_node, current_token['dep'], current_token_node)
 
-    # async_run_draw(tree_to_string(nodes[0]),daemon=False)
+
     pattern=None
     pattern1,pattern0=None,None
     training_data_by_pattern={}
@@ -672,7 +672,7 @@ def generate_training_set(patterns,tokenDict,manual_relations):
     return training_data_by_pattern
 
 # @print_local_when_exception
-def find_relation_by_pattern(patterns,tokenDict,print_result=True):
+def find_relation_by_pattern(patterns,tokenDict,print_result=True,draw=False):
     nodes = {}
     nodes['0'] = Node('0', "ROOT", "ROOT")
     all_edges = {}
@@ -715,6 +715,8 @@ def find_relation_by_pattern(patterns,tokenDict,print_result=True):
                 all_edges[father_token_node.name + current_token['dep'] + current_token_node.name] = \
                     Edge(father_token_node, current_token['dep'], current_token_node)
 
+    if draw:
+        async_run_draw(tree_to_string(nodes['0']),daemon=True)
     # t=Tree.fromstring(tree_to_string(nodes[0]))
     # t.draw()
     relations=[]

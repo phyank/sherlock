@@ -1,4 +1,4 @@
-import json
+import json,re
 
 from py2neo import Graph
 
@@ -12,12 +12,38 @@ POS_TO_LABEL={
     "PER":"Person",
     "ORG":"Organization",
     "TIME":"Time",
-    "n":"Item",
-    "nr":"Item",
+    "n":"Entity",
+    "nr":"Entity",
     "LOC":"Location",
-    "nz":"Item",
-    "nw":"Item"
+    "nz":"Entity",
+    "nw":"Entity",
+    "v":"Action"
 }
+
+class RegExtractor:
+    def __init__(self,patterns):
+        self.extractors=[]
+        for pattern in patterns:
+            subpatterns = re.split("\s+", re.split("\s*#\s*", pattern)[0])
+            if not subpatterns: continue
+
+            for subpattern in subpatterns:
+                if subpattern:
+                    subpattern=subpattern.split("==>")
+                    # print("PATTERN",subpattern)
+                    if len(subpattern)==1:
+                        pattern, hitName = subpattern[0],subpattern[0]
+                    elif len(subpattern)==2:
+                        pattern,hitName=subpattern[0],subpattern[1]
+                    else:
+                        continue
+                    self.extractors.append((re.compile(pattern),hitName))
+    def findall(self,string):
+        hits=[]
+        for extactor,hitName in self.extractors:
+            if extactor.search(string):
+                hits.append(hitName)
+        return hits
 
 def get_word_label(pos):
     try:
@@ -25,7 +51,8 @@ def get_word_label(pos):
     except KeyError:
         return "Entity"
 
-def add_case(graph,sentences,case_index=0):
+
+def add_case(graph,sentences,article,case_index=0,reg_extractor=None):
     caseName = "Case%d" % case_index
     graph.run("MERGE (:LegalCase{name:'%s'})" % caseName)
 
@@ -34,6 +61,13 @@ def add_case(graph,sentences,case_index=0):
     for k in special_r:
         special_dict[str(k)] = new_token(index=str(k), word=special_r[k], pos=None, lac_pos=None, dep=None, head=None,
                                       begin=None, end=None)
+
+    if reg_extractor and article:
+        for specialPhrase in reg_extractor.findall(article):
+            graph.run("MERGE (:Keyword{name:'%s'});" % specialPhrase)
+            graph.run("MATCH (a:LegalCase),(b:Keyword) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:监督关键短语]->(b);" % (
+            caseName, specialPhrase))
+
 
     for sentence in sentences:
         tokenDict = sentence['tokens']
