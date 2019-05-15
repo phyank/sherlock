@@ -81,6 +81,9 @@ lac2int={
 comma_marker={"comma":1,
               "no_comma":0}
 
+COMMAS=",，、"
+STOPS="。；？！?!"
+
 CLASS={"Y":1,
        "N":0}
 
@@ -186,14 +189,23 @@ def get_local_settings(conf="local_settings"):
     return conf_dict
 
 
-def make_feature(relation,commas,tokens):
-    max_idx = max((int(relation[k]['idx']) for k in relation if ((k not in ("pattern", "id")) and ('idx' in relation[k]))))
-    min_idx = min((int(relation[k]['idx']) for k in relation if ((k not in ("pattern", "id")) and ('idx' in relation[k]))))
+def make_feature(relation,commas,tokens,stops=None):
+    max_idx = max((int(relation[k]['idx']) for k in relation if ((k not in ("pattern", "id")) and ('idx' in relation[k] and int(relation[k]['idx'])>0))))
+    min_idx = min((int(relation[k]['idx']) for k in relation if ((k not in ("pattern", "id")) and ('idx' in relation[k] and int(relation[k]['idx'])>0))))
 
     has_comma = False
     for comma in commas:
         if int(comma) > int(min_idx) and int(comma) < int(max_idx):
             has_comma = True
+            break
+
+    if stops is None:
+        stops=[]
+
+    has_stop=False
+    for stop in stops:
+        if int(stop) > int(min_idx) and int(stop) < int(max_idx):
+            has_stop = True
             break
 
     return (pos2i(tokens[relation['a']['idx']]['lac_pos']),
@@ -205,7 +217,8 @@ def make_feature(relation,commas,tokens):
                          1 if 'idx' in relation['r'] and int(relation['b']['idx']) - int(relation['r']['idx']) > 0 else -1,
                          abs(int(relation['b']['idx']) - int(relation['a']['idx'])),
                          1 if int(relation['b']['idx']) - int(relation['a']['idx']) > 0 else -1,
-                         comma_marker["comma" if has_comma else "no_comma"]),10
+                         comma_marker["comma" if has_comma else "no_comma"],
+                        1 if has_stop else -1),11
 
 def print_local_when_exception(func):
     def inner(*args,**kwargs):

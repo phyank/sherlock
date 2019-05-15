@@ -81,39 +81,71 @@ def manual_tagger(draw_tree=False,add_kg=True):
 
         lac_result={}
         i=1
+        #
+        # PUs={}
         for word in wordlist:
+            # if "index" in word and word['type']=="w":
+            #     PUs[word['index']]=word
+
             lac_result[i]=word
             i+=1
         if USE=="CORENLP":
+            # commas_and_stops=[]
             sentences=call_api(tokenized_repr(wordlist))
         else:# USE=="STANFORD":
             sentences=[]
             sentence=[]
             sentenceIndex=0
+            PUs={}
+            widx=0
             for w in wordlist:
+                widx+=1
                 sentence.append(w)
+                if w['type']=="w":
+                    PUs[widx]=w
                 if w['word'] in "。？！":
+                    tokenDict=call_stanford(sentence,host="http://%s:%d/stanford"%(conf_dict['corenlp_host'],conf_dict['corenlp_port']))
+                    for pidx in PUs:
+                        tokenDict[str(pidx)]=new_token(index=str(pidx),word=PUs[pidx]['word'],pos="PU",lac_pos="w",dep="-",head="0",begin=PUs[pidx]['start'],end=PUs[pidx]['start']+PUs[pidx]['length'])
+
+                    ranked_tokens = {}
+                    for i in sorted([int(k) for k in tokenDict]):
+                        ranked_tokens[str(i)] = tokenDict[str(i)]
+
                     sentences.append(new_sentence_repr(index=sentenceIndex,
-                                                       tokenDict=call_stanford(sentence,host="http://%s:%d/stanford"%(conf_dict['corenlp_host'],conf_dict['corenlp_port']))))
+                                                       tokenDict=ranked_tokens))
                     sentence=[]
+                    PUs={}
+                    widx=0
         # print("sentences")
         # print(sentences)
 
         articleJSON['sentences']=sentences
 
-        for sentence in sentences:
+        for sidx,sentence in enumerate(sentences):
             ranked_tokens=sentence['tokens']
+
+            sentence['tokens']=ranked_tokens
 
             for k in special_r:
                 ranked_tokens[str(k)] = new_token(index=str(k), word=special_r[k], pos=None, lac_pos=None, dep=None,
                                               head=None, begin=None, end=None)
 
             commas=set()
+            stops=set()
             last_index='0'
             for wordidx in ranked_tokens:
-                if int(wordidx) > 0:##build prefix
+                if int(wordidx) > 0:
                     word=ranked_tokens[wordidx]
+                    if word['pos']=="PU":
+                        if word['word'] in COMMAS:
+                            commas.add(wordidx)
+                        elif word['word'] in STOPS:
+                            stops.add(wordidx)
+                        else:
+                            print("Ignored %s"%word['word'])
                     # print(ranked_tokens.keys())
+                    ##build prefix
                     try:
                         if int(word['head'])>0 and ranked_tokens[word['head']]['pos'] in ("NN","NR") and word['pos'] not in ("PU"):
                             ranked_tokens[word['head']]['prefix']= \
@@ -123,11 +155,11 @@ def manual_tagger(draw_tree=False,add_kg=True):
                         continue
                         # sentence['enhancedPlusPlusDependencies'].remove(word)
 
-                if int(wordidx)-int(last_index)>1:
-                    commas.update(map(lambda x:str(x),range(int(last_index)+1,int(wordidx)))) #for conll2007 output no commas in dict
-
-                if ranked_tokens[wordidx]['word'] in ",，；;、":
-                    commas.add(ranked_tokens[wordidx]['index'])# for corenlp server
+                # if int(wordidx)-int(last_index)>1:
+                #     commas.update(map(lambda x:str(x),range(int(last_index)+1,int(wordidx)))) #for conll2007 output no commas in dict
+                #
+                # if ranked_tokens[wordidx]['word'] in ",，；;、":
+                #     commas.add(ranked_tokens[wordidx]['index'])# for corenlp server
 
                 last_index=wordidx
 
@@ -150,7 +182,7 @@ def manual_tagger(draw_tree=False,add_kg=True):
                     print("Pattern classifier not found : %s"%thisPattern)
                     auto_relations.append(r)
                 else:
-                    this_feature,n_features=make_feature(r,commas=commas,tokens=ranked_tokens)
+                    this_feature,n_features=make_feature(r,commas=commas,stops=stops,tokens=ranked_tokens)
                     result=clf.predict(np.ndarray(shape=(1,n_features),dtype='int',buffer=np.array(this_feature)))[0]
                     if result==1:
                         auto_relations.append(r)
@@ -163,7 +195,7 @@ def manual_tagger(draw_tree=False,add_kg=True):
                 wordFormatted.append(make_word_repr(x,ranked_tokens))
             print("".join(wordFormatted))
 
-
+            # print(ranked_tokens.keys())
 
             relations=[]
 
@@ -205,13 +237,16 @@ def manual_tagger(draw_tree=False,add_kg=True):
                         continue
 
             while True:
-                print(" ".join(map(lambda x: ("%s(%s%s%s->%s)" % (
-                                x['word'],
-                                x['index'],
-                                x['pos'],
-                                x['lac_pos'],
-                                ranked_tokens[x['head']]['word'] if x['head'] in ranked_tokens else "PUNC")),
-                (ranked_tokens[idx] for idx in ranked_tokens if int(idx)>0))))
+                # print(" ".join(map(lambda x: ("%s(%s%s%s->%s)" % (
+                #                 x['word'],
+                #                 x['index'],
+                #                 x['pos'],
+                #                 x['lac_pos'],
+                #                 ranked_tokens[x['head']]['word'] if x['head'] in ranked_tokens else "PUNC")),
+                # (ranked_tokens[idx] for idx in ranked_tokens if int(idx)>0))))
+                for x in [ranked_tokens[idx] for idx in ranked_tokens if int(idx) > 0]:
+                    wordFormatted.append(make_word_repr(x, ranked_tokens))
+                print("".join(wordFormatted))
 
                 relation=input("[no.%d]relation(a,r,b)>"%index)
                 if not relation:

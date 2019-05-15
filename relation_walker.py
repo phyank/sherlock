@@ -569,15 +569,18 @@ def generate_training_set(patterns,tokenDict,manual_relations):
     all_edges = {}
     tokenDict[-100]=new_token(index='-100',word="None",pos=None,lac_pos=None,dep=None,head='0',begin=None,end=None)
     #{'lac_pos':"None","word":"None","ref":{"fullname":"None","governor":0,"dep":"None"}}
+    # print(" ".join(map(lambda x:tokenDict[x]['word']+tokenDict[x]['index'],tokenDict)))
 
     commas=set()
+    stops=set()
 
     for a in tokenDict:
 
         token = tokenDict[a]
         if token['lac_pos'] == -100:continue
 
-        if token['word'] in ",，；;、":commas.add(a)
+        if token['word'] in COMMAS:commas.add(a)
+        if token['word'] in STOPS: stops.add(a)
 
         if a not in nodes:
             nodes[a] = Node(a, token['word'], token['prefix']+token['word'])
@@ -605,7 +608,8 @@ def generate_training_set(patterns,tokenDict,manual_relations):
                 all_edges[father_token_node.name + current_token['dep'] + current_token_node.name] = \
                     Edge(father_token_node, current_token['dep'], current_token_node)
 
-
+    # print("commas",commas)
+    # print("stops",stops)
     pattern=None
     pattern1,pattern0=None,None
     training_data_by_pattern={}
@@ -653,7 +657,9 @@ def generate_training_set(patterns,tokenDict,manual_relations):
         for r in relations:
             # print(r)
 
-            thisTraining,n_features=make_feature(r,commas=commas,tokens=tokenDict)
+            thisTraining,n_features=make_feature(r,commas=commas,stops=stops,tokens=tokenDict)
+
+            # print(r,thisTraining)
 
             data.append(thisTraining)
             if "%s,%s,%s"%(r['a']['idx'],r['r']['idx'],r['b']['idx']) in labeled_relations:
