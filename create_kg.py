@@ -28,6 +28,12 @@ def run_draw(sentence_repr):
 def build_kg(draw_tree=False):
     graph = Graph(uri=conf_dict['neo4j_address'], auth=(conf_dict['neo4j_user'], conf_dict['neo4j_pass']))
 
+    location_patterns={}
+
+    for i in graph.run("match (n:Location) where n._subgraph='baike' return n.name,n.short"):
+        location_patterns[i['n.name']]=i['n.name']
+        location_patterns[i['n.short']]=i['n.name']
+
     for label in ("LegalCase", "Keyword", "Location", "Person", "Organization", "Time", "Item", "Entity","Action"):
         graph.run("CREATE INDEX ON :%s(name)" % label)
 
@@ -198,7 +204,7 @@ def build_kg(draw_tree=False):
             final_sentences.append(sentence)
         # print(final_sentences)
 
-        add_case(graph,final_sentences,article=articleJSON["fact"],case_index=index,reg_extractor=regExractor)
+        add_case(graph,final_sentences,article=articleJSON["fact"],case_index=index,reg_extractor=regExractor,location_patterns=location_patterns)
 
         index+=1
 def build_test():

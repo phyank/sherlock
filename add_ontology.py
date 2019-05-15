@@ -1,5 +1,6 @@
 # from tools import *
 from py2neo import Graph
+from py2neo.cypher import cypher_repr
 from  tools_pypy import *
 
 conf_dict=get_local_settings()
@@ -12,13 +13,20 @@ nations={'基诺', '门巴族', '布朗', '毛南', '珞巴', '土家', '普米'
 provinceEnd={'省',"自治区","市"}
 cityEnd={"自治州","市","地区"}
 
-areaEnd={"(?!发)区"}
+areaEnd={"(?!发)区","市","自治县","县"}
 
-def search(word="广东省"):
+def search_baiketriples(word="广东省"):
     g = line_generator(conf_dict['ontology_dumpfile'], encoding='utf8')
     for line in g:
         a,r,b=line.split("\t")
         if a ==word :print("found")
+
+def search_dumps(word):
+    n=0
+    g = line_generator("dump_locations.json", encoding='utf8')
+    for line in g:
+        if word in line:n+=1
+    print(n)
 
 def dump_ontology_locations():
     g=line_generator(conf_dict['ontology_dumpfile'],encoding='utf8')
@@ -43,6 +51,9 @@ def dump_ontology_locations():
             # if i >1000:break
             # OUTPUT
             original_entities[targets[lastA]].update(entity)
+            if "洪山" in targets[lastA]:
+                print("Dumped")
+                print(original_entities[targets[lastA]])
             json.dump(original_entities[targets[lastA]],of,ensure_ascii=False)
             of.write("\n")
             final_entities[targets[lastA]]=original_entities[targets[lastA]]
@@ -58,8 +69,22 @@ def dump_ontology_locations():
                     entity[r].append(b)
                 except KeyError:
                     entity[r]=[b]
+    for t in targets:
+        if t not in final_entities and targets[t] not in final_entities:
+            final_entities[targets[t]]=original_entities[targets[t]]
+            if "洪山" in targets[t]:print("Dumped")
+            json.dump(original_entities[targets[t]], of, ensure_ascii=False)
+            of.write("\n")
+    # print(final_entities)
 
-    print(final_entities)
+def make_neo4j_key(value):
+    if value[0] in '1234567890':
+        value="_"+value
+    for c in "、，。?：/\\；”“{}[](),.?;:（）【】！@#￥%……&*!@#$%^&*":
+        if c in value:value=value.replace(c,"")
+    value=value.replace(" ","").replace("\u200b","")
+    return value
+
 def make_china_location_entities():
     entityDict={}
     g = line_generator("Locations.json", encoding='utf8')
@@ -76,7 +101,7 @@ def make_china_location_entities():
 
     cityGen = line_generator("Administrative-divisions-of-China/dist/cities.csv", encoding='utf8')
 
-    areaGen = line_generator("Administrative-divisions-of-China/dist/provinces.csv", encoding='utf8')
+    areaGen = line_generator("Administrative-divisions-of-China/dist/areas.csv", encoding='utf8')
 
     codeDict["provinceCode"]={}
 
@@ -84,7 +109,10 @@ def make_china_location_entities():
     targets={}
 
     labels = provGen.__next__().split(",")
+    # ii=0
     for record in provGen:
+        # ii+=1
+        # print(record)
         this={"type":"ProvinceName"}
         for i,value in enumerate(record.split(",")):
             this[labels[i]]=value.replace('"',"")
@@ -94,13 +122,14 @@ def make_china_location_entities():
         for end in provinceEnd:
             if re.search("%s$"%end,short):
                 short=short.replace(end,"")
+        if not short: short = this['name']
 
 
         while True:
             hit = False
             for nation in nations:
                 # print(re.search("%s$"%nation,short),"%s$"%nation,short)
-                if re.search("%s$"%nation,short):
+                if re.search("%s$"%nation,short) and short!="内蒙古":
                     hit=True
                     short=short.replace(nation,"")
             if hit:continue
@@ -112,7 +141,8 @@ def make_china_location_entities():
         targets[this['name']] = this['name']
         # print(this)
         entities[this['name']] = this
-
+    # print(len(entities))
+    # print(ii)
     labels = cityGen.__next__().split(",")
     for record in cityGen:
         # print("City",record)
@@ -126,6 +156,7 @@ def make_china_location_entities():
             if re.search("%s$"%end,short):
                 # print("True")
                 short=short.replace(end,"")
+        if not short: short = this['name']
 
 
         while True:
@@ -155,10 +186,11 @@ def make_china_location_entities():
             this[labels[i]] = value.replace('"', "")
 
         short = this['name']
-        for end in cityEnd:
+        for end in areaEnd:
             if re.search("%s$" % end, short):
                 # print("True")
                 short = short.replace(end, "")
+        if not short:short=this['name']
 
         while True:
             hit = False
@@ -193,6 +225,9 @@ def make_china_location_entities():
 def load_locations_to_kg():
     graph = Graph(uri=conf_dict['neo4j_address'], auth=(conf_dict['neo4j_user'], conf_dict['neo4j_pass']))
 
+    for label in ("Location", "ProvinceName", "CityName", "AreaName"):
+        graph.run("CREATE INDEX ON :%s(name)" % label)
+
     areaCode, provinceCode, cityCode = {}, {}, {}
     pendingToLink=[]
     with open("dump_locations.json","r") as dumpFile:
@@ -200,8 +235,9 @@ def load_locations_to_kg():
         while True:
             newLine=dumpFile.readline()
             if not newLine:break
-
+            # if "洪山" in newLine :print("read")
             entity=json.loads(newLine)
+            # print(entity['type'])
             if entity['type']=="ProvinceName":
                 provinceCode[entity['code']]=entity['name']
             elif entity['type']=="CityName":
@@ -212,15 +248,43 @@ def load_locations_to_kg():
             this={}
 
             this['type']=entity['type']
+            this['name']=entity['name']
             if "areaCode" in entity:this["areaCode"]=entity['areaCode']
             if "cityCode" in entity: this["cityCode"] = entity['cityCode']
             if "provinceCode" in entity: this["provinceCode"] = entity['provinceCode']
 
             pendingToLink.append(this)
-
-            graph.run("MERGE (:Location:%s{name:'%s'});"%(entity['type'],entity['name']))
-
+            # if "洪山" in this['name']:print("graph")
+            try:
+                graph.run("MERGE (:Location:%s{_subgraph:'baike',%s});"%(entity['type'],",".join(map(lambda k:"%s:%s"%(make_neo4j_key(k),cypher_repr(";".join(entity[k]) if isinstance(entity[k],list) else entity[k])),(k for k in entity if k!="type")))))
+            except Exception as e:
+                print(repr("MERGE (:Location:%s{_subgraph:'baike',%s});"%(entity['type'],",".join(map(lambda k:"%s:%s"%(make_neo4j_key(k),cypher_repr(";".join(entity[k]) if isinstance(entity[k],list) else entity[k])),(k for k in entity if k!="type"))))))
+                exit(-1)
+    for this in pendingToLink:
+        if "areaCode" in this:
+            try:
+                areaName=areaCode[this['areaCode']]
+            except KeyError:
+                pass
+            else:
+                graph.run("MATCH (a:Location),(b:AreaName) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:位于]->(b)"%(this['name'],areaName))
+        elif "cityCode" in this:
+            try:
+                cityName=cityCode[this['cityCode']]
+            except KeyError:
+                pass
+            else:
+                graph.run("MATCH (a:Location),(b:CityName) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:位于]->(b)"%(this['name'],cityName))
+        elif "provinceCode" in this:
+            try:
+                provinceName = provinceCode[this['provinceCode']]
+            except KeyError:
+                pass
+            else:
+                graph.run("MATCH (a:Location),(b:ProvinceName) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:位于]->(b)" % (this['name'], provinceName))
 if __name__=="__main__":
-   # make_china_location_entities()
-    dump_ontology_locations()
-   #  search("广东")
+   # print(make_china_location_entities()[1])
+   dump_ontology_locations()
+   # search_baiketriples("西藏自治区")
+   load_locations_to_kg()
+   # search_dumps("ProvinceName")

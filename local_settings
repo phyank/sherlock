@@ -16,3 +16,8 @@ lac_port 18080
 corenlp_dir /home/jason/CoreNLP
 corenlp_host localhost
 corenlp_port 9001
+
+
+# ontology arb dump file
+
+ontology_dumpfile D:\Downloads\baiketriples\baike_triples.txt
