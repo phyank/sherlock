@@ -1,3 +1,6 @@
+"""
+这个文件中记录的方法可以从法律文书加载、导入图谱。可以从已标注的法律文书载入，也可以从新的法律文书载入
+"""
 import traceback
 from copy import deepcopy
 from tools_cpython import *
