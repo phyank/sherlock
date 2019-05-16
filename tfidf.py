@@ -1,3 +1,7 @@
+"""
+尝试使用TF-IDF查找案件法律使用情况的特征词汇
+"""
+
 # from tools import *
 import json,math,time
 

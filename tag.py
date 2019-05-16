@@ -1,6 +1,16 @@
+"""
+强化学习模式的关系标注器，以ARB三元组关系标注为主要关系模型。
+有以下几个功能：
+1. 对输入文章进行分词、依存句法剖析、格式转换等基本预处理步骤
+2. 根据历史标注数据重新抽取、统计依存关系模式并分别训练决策树分类器
+3. 自动抽取部分关系，供用户确认。用户确认后即作为已标注关系保存
+4. 记录用户手动输入的关系
+5. 更新历史标注数据
+"""
+
 import traceback
 from copy import deepcopy
-from tools import *
+from tools_cpython import *
 from threading import Thread
 
 from nltk.tree import Tree

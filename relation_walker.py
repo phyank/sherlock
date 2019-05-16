@@ -1,6 +1,15 @@
+"""
+这个模块记录了本项目关系抽取的内部原理，包括以下功能：
+1. 给定一个完成了依存句法分析标注的句子，建立与之对应的数据结构供后续计算
+2. 给定依存句法树与二至三元词组，抽取词对间的关系并表示为统一的文本形式
+3. 给定文本形式的依存关系模式与依存句法树，抽取其中所有满足该模式的二至三元词组
+4. 根据满足某种依存关系模式的词组中各个词的词性、命名实体类别、词间距、词间标点等特征构造训练集，训练决策树分类器，
+   用于判断一个满足上述依存关系模式的新词组是否确实符合定义的关系
+"""
+
 import traceback,json,pickle,base64
 from copy import deepcopy
-from tools import *
+from tools_cpython import *
 from definitions import *
 
 from nltk.tree import Tree

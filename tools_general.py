@@ -1,3 +1,8 @@
+"""
+这个文件存放共用的工具函数，该文件兼容pypy3
+
+"""
+
 import json,os,re,traceback
 
 from urllib.request import urlopen

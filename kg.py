@@ -1,8 +1,12 @@
+"""
+这个模块负责与图谱服务器进行交互。add_case将案件导入图谱，完成了导入过程中的实体对齐、扁平关系连接、富关系连接等步骤
+"""
+
 import json,re
 
 from py2neo import Graph
 
-from tools import *
+from tools_cpython import *
 from relation_walker import *
 
 if __name__=='__main__':

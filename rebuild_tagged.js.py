@@ -1,5 +1,5 @@
 import json,os
-from tools import *
+from tools_cpython import *
 
 if os.name=='nt':
     copy_command="copy"

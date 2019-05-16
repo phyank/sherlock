@@ -1,3 +1,9 @@
+"""
+这个文件存放共用的工具函数，nltk等库仅支持cpython
+导入该文件也会导入tools_general.py
+
+"""
+
 import json,os,multiprocessing,re,traceback
 
 from urllib.request import urlopen
@@ -16,7 +22,7 @@ import py2neo
 
 from definitions import *
 
-from tools_pypy import *
+from tools_general import *
 
 def run_draw(sentence_repr):
     Tree.fromstring(sentence_repr).draw()

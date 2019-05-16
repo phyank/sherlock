@@ -1,7 +1,11 @@
+"""
+本体导入、融合模块，从已有图谱导入结构化知识
+"""
+
 # from tools import *
 from py2neo import Graph
 from py2neo.cypher import cypher_repr
-from  tools_pypy import *
+from  tools_general import *
 
 conf_dict=get_local_settings()
 

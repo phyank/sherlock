@@ -1,3 +1,7 @@
+"""
+这是一个在CAIL2018中进行关键字搜索的小工具
+"""
+
 import json
 
 def line_generator(fn,encoding='utf8'):

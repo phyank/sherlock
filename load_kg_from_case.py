@@ -1,6 +1,6 @@
 import traceback
 from copy import deepcopy
-from tools import *
+from tools_cpython import *
 from threading import Thread
 
 from nltk.tree import Tree
@@ -25,7 +25,7 @@ s={
 def run_draw(sentence_repr):
     Tree.fromstring(sentence_repr).draw()
 
-def build_kg(draw_tree=False):
+def load_kg_from_new_article(draw_tree=False):
     graph = Graph(uri=conf_dict['neo4j_address'], auth=(conf_dict['neo4j_user'], conf_dict['neo4j_pass']))
 
     location_patterns={}
@@ -207,8 +207,35 @@ def build_kg(draw_tree=False):
         add_case(graph,final_sentences,article=articleJSON["fact"],case_index=index,reg_extractor=regExractor,location_patterns=location_patterns)
 
         index+=1
+
+def  load_kg_from_tagged():
+    g = line_generator("tagged.json")
+
+    conf_dict = get_local_settings()
+
+    graph = Graph(uri=conf_dict['neo4j_address'], auth=(conf_dict['neo4j_user'], conf_dict['neo4j_pass']))
+
+    for label in ("LegalCase", "Keyword", "Location", "Person", "Organization", "Time", "Item", "Entity", "Action"):
+        graph.run("CREATE INDEX ON :%s(name)" % label)
+
+    with open("critical", "r", encoding="utf8") as pfile:
+        lines = pfile.readlines()
+
+    regExractor = RegExtractor(patterns=lines)
+
+    index = 0
+    while True:
+        try:
+            articleJSON = json.loads(g.__next__())
+        except StopIteration:
+            break
+        else:
+
+            add_case(graph, articleJSON['sentences'], articleJSON['fact'], index, regExractor)
+            index += 1
+
 def build_test():
-    build_kg()
+    load_kg_from_new_article()
 
 if __name__=="__main__":
     build_test()

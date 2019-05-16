@@ -1,3 +1,11 @@
+"""
+该模块将stanford parser中的LexicalizedParser类封装成一个web微服务
+特别封装该类是由于该类支持仅进行部分词类标注的输入，故能复用准确度比内置词性标注器更高的词法分析的标注结果
+由于LexicalizedParser main函数中的一个逻辑问题，需要修改edu.stanford.nlp.parser.lexparser.LexicalizedParser
+中的一行代码后本包装器才能正常运行
+
+"""
+
 import subprocess,os
 
 import tornado.ioloop,tornado.web,tornado.escape
@@ -7,7 +15,7 @@ from time import sleep
 
 from tornado import gen
 
-from tools import get_local_settings
+from tools_cpython import get_local_settings
 
 PASSWORD='rq2j3fja9phwdfn2l3famsdoi1234t2143ghdsnwsqety56i'
 
