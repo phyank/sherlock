@@ -3,7 +3,7 @@
 
 """
 
-import json,os,re,traceback
+import json,os,re,traceback,array
 
 from urllib.request import urlopen
 from urllib.parse import urlencode
@@ -44,7 +44,8 @@ lac2penn={"n":"NN",
     "[D:LEGAL_NOUN]":"NN",
 "[D:NOUN_LEGAL]":"NN",
 "[D:NR]":"NR",
-          "ORG":"NR"
+          "ORG":"NR",
+          "BAD":""
      }
 
 lac2int={
@@ -124,6 +125,37 @@ def first_N(s,n=1):
         if len(result)==n:
             break
     return result
+
+def med(a,b):
+    """
+    Minimum edit distance algorithm(Levenshtein) implementation
+
+    :param a: str a
+    :param b: str b
+    :return: minimum edit distance
+    """
+    lena,lenb=(len(a),len(b))
+    memo=array.array('l',[-1 for i in range((lena+1)*(lenb+1))])
+
+    for i in range(0,lena+1):
+        for j in range(0,lenb+1):
+            # if i*lenb+j==3:
+            #     print("!",i,j)
+            if i==0:
+                memo[i*(lenb+1)+j]=j
+            elif j==0:
+                memo[i*(lenb+1)+j] = i
+            else:
+                memo[i*(lenb+1)+j]=min(memo[(i-1)*(lenb+1)+j]+1,
+                                       memo[i*(lenb+1)+(j-1)]+1,
+                                       memo[(i-1)*(lenb+1)+(j-1)]+(2 if a[i-1]!=b[j-1] else 0))
+
+    # for i in range(lena+1):
+    #     print("\n")
+    #     for j in range(lenb+1):
+    #         print(" %d(%d:%d,%d)"%(memo[i * (lenb+1) + j],i * (lenb+1) + j,i,j),end=" ")
+    # print("\n")
+    return memo[(lena+1)*(lenb+1)-1]
 
 def new_token(index,word,pos,lac_pos,dep,head,begin,end,prefix=""):
     return {
@@ -250,6 +282,20 @@ def line_generator(fn,encoding='utf8'):
         else:
             return
 
+def word2vec_sentence_generator(fns,encoding='utf8'):
+    for fn in fns:
+        jf = open(fn, encoding=encoding)
+        while True:
+            line = jf.readline()
+            if line:
+                if line[-1] == "\n":
+                    line = line[:-1]
+
+
+                yield [i['word'] for i in json.loads(line)['cut']]
+            else:
+                break
+
 def pos2i(pos):
     try:
         return lac2int[pos]
@@ -369,7 +415,19 @@ def lac_cut(article,addr="localhost",port=18080):
     for word in words:
         word = word.split(" ")
         if len(word)!=4:continue
-        a.append({"word": word[0], "type": word[1], "start": word[2], "length": word[3]})
+        # if "一宗" in word[0]:
+        #     print("fuck",repr(word[0]))
+        #     print("。" in word[0])
+        if len(word[0])>1 and "。" in word[0]:
+            before,after=word[0].split("。")
+            # print("before after",before,after)
+            if before:
+                a.append({"word": before, "type": word[1], "start": word[2], "length": len(before)})
+            a.append({"word": "。", "type": "w", "start": str(int(word[2])+len(before)), "length": "1"})
+            if after:
+                a.append({"word": after, "type": "BAD", "start": str(int(word[2])+len(before)+1), "length": len(after)})
+        else:
+            a.append({"word": word[0], "type": word[1], "start": word[2], "length": word[3]})
 
     return a
 

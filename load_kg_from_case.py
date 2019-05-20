@@ -16,6 +16,8 @@ USE="STANFORD"
 
 VERBOSE=False
 
+LOC_BLACK_LIST=["县"]
+
 conf_dict=get_local_settings()
 
 s={
@@ -34,8 +36,10 @@ def load_kg_from_new_article(draw_tree=False):
     location_patterns={}
 
     for i in graph.run("match (n:Location) where n._subgraph='baike' return n.name,n.short"):
-        location_patterns[i['n.name']]=i['n.name']
-        location_patterns[i['n.short']]=i['n.name']
+        if i['n.name'] and i['n.name'] not in LOC_BLACK_LIST:
+            location_patterns[i['n.name']]=i['n.name']
+        if i['n.short'] and i['n.short'] not in LOC_BLACK_LIST:
+            location_patterns[i['n.short']]=i['n.name']
 
     for label in ("LegalCase", "Keyword", "Location", "Person", "Organization", "Time", "Item", "Entity","Action"):
         graph.run("CREATE INDEX ON :%s(name)" % label)
@@ -67,11 +71,14 @@ def load_kg_from_new_article(draw_tree=False):
 
     index=1
     last=""
-
+    jump=0
     for i in range(1000):
         final_sentences = []
 
         articleJSON = json.loads(g.__next__())
+        if jump:
+            jump-=1
+            continue
         assert articleJSON!=last
         last=articleJSON
 
@@ -218,6 +225,13 @@ def  load_kg_from_tagged():
 
     graph = Graph(uri=conf_dict['neo4j_address'], auth=(conf_dict['neo4j_user'], conf_dict['neo4j_pass']))
 
+    location_patterns={}
+
+    for i in graph.run("match (n:Location) where n._subgraph='baike' return n.name,n.short"):
+        location_patterns[i['n.name']]=i['n.name']
+        location_patterns[i['n.short']]=i['n.name']
+
+
     for label in ("LegalCase", "Keyword", "Location", "Person", "Organization", "Time", "Item", "Entity", "Action"):
         graph.run("CREATE INDEX ON :%s(name)" % label)
 
@@ -234,11 +248,12 @@ def  load_kg_from_tagged():
             break
         else:
 
-            add_case(graph, articleJSON['sentences'], articleJSON['fact'], index, regExractor)
+            add_case(graph, articleJSON['sentences'], articleJSON['fact'], index, regExractor,location_patterns)
             index += 1
 
 def build_test():
     load_kg_from_new_article()
+    # load_kg_from_tagged()
 
 if __name__=="__main__":
     build_test()

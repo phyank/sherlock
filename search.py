@@ -34,5 +34,24 @@ def search_keyword_any(keyword='test',crime_exempt=''):
 
         continue
 
+def search_keyword_any_baike(keyword='test',word=True):
+    g = line_generator("D:\\Downloads\\baiketriples\\baike_triples.txt")
+
+    while True:
+        try:
+            line=g.__next__()
+        except StopIteration:
+            break
+
+        a,r,b=line.split("\t")
+        if word:
+            if keyword in a:
+                print(line)
+        else:
+            if keyword in a or keyword in r or keyword in b:
+                print(line)
+
+        continue
+
 if __name__=="__main__":
-    search_keyword_any('休庭','')
+    search_keyword_any_baike('钝器')

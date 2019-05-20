@@ -23,7 +23,7 @@ conf_dict=get_local_settings()
 
 CORENLP_DIR=conf_dict['corenlp_dir']
 
-CMD=['java',
+CMD=['C:\\PROGRA~1\\Java\\JDK-10~1.2\\bin\\java',
                   '-mx2g',
                   '-cp','*',
                   'edu.stanford.nlp.parser.lexparser.LexicalizedParser',

@@ -234,7 +234,7 @@ def load_locations_to_kg():
 
     areaCode, provinceCode, cityCode = {}, {}, {}
     pendingToLink=[]
-    with open("dump_locations.json","r") as dumpFile:
+    with open("dump_locations.json","r",encoding="utf8") as dumpFile:
 
         while True:
             newLine=dumpFile.readline()
@@ -288,7 +288,7 @@ def load_locations_to_kg():
                 graph.run("MATCH (a:Location),(b:ProvinceName) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:位于]->(b)" % (this['name'], provinceName))
 if __name__=="__main__":
    # print(make_china_location_entities()[1])
-   dump_ontology_locations()
+   # dump_ontology_locations()
    # search_baiketriples("西藏自治区")
    load_locations_to_kg()
    # search_dumps("ProvinceName")

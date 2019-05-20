@@ -84,15 +84,16 @@ def add_case(graph,sentences,article,case_index=0,reg_extractor=None,location_pa
             token = tokenDict[tokenIndex]
 
             if token['lac_pos'] is None:continue
-
+            # print(location_patterns)
             if "LOC" in token['lac_pos']:
-                graph.run("MERGE (:Location{name:'%s'});" % (token['word']))
-                graph.run("MERGE (n:Location{name:'%s'}) ON MATCH SET n._subgraph = 'legalCase' SET n.prefix = '%s';"%(token['word'],token['prefix']))
+                graph.run("MERGE (n:Location{name:'%s'}) ON CREATE SET n._subgraph = 'legalCase';" % (token['word']))
+                # graph.run("MERGE (n:Location{name:'%s'}) WHERE n._subgraph<>'baike' ON MATCH SET n._subgraph = 'legalCase' SET n.prefix = '%s';"%(token['word'],token['prefix']))
                 graph.run("MATCH (a:LegalCase),(b:Location) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:地理位于]->(b);"%(caseName,token['word']))
                 for pattern in location_patterns:
-                    if pattern in token['word'] or token['word'] in pattern:
+                    # print(locals())
+                    if med(pattern,token['word'])/max(min(len(pattern),len(token['word'])),1)<=0.5:
                         graph.run(
-                            "MATCH (a:Location),(b:Location) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:位于]->(b);" % (token['word'],location_patterns[pattern]))
+                            "MATCH (a:Location),(b:Location) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:is]->(b);" % (token['word'],location_patterns[pattern]))
             elif "PER" in token['lac_pos']:
                 graph.run("MERGE (:Person{name:'%s'});" % (token['word']+"_"+caseName))
                 graph.run(
@@ -108,7 +109,7 @@ def add_case(graph,sentences,article,case_index=0,reg_extractor=None,location_pa
                     "MATCH (a:LegalCase),(b:Organization) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:相关组织]->(b);" % (
                     caseName, token['word']))
                 for pattern in location_patterns:
-                    if pattern in token['word'] or token['word'] in pattern:
+                    if pattern in token['word']:
                         graph.run(
                             "MATCH (a:Organization),(b:Location) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:位于]->(b);" % (token['word'],location_patterns[pattern]))
             elif "TIME" in token['lac_pos']:
