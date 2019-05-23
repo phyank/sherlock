@@ -2,7 +2,7 @@ from gensim.models import Word2Vec
 from gensim.models.word2vec import LineSentence
 import MySQLdb
 
-from scipy.spatial.distance import cosine
+from scipy.spatial.distance import cosine,jaccard
 
 from tools_cpython import *
 
@@ -63,6 +63,7 @@ def test_cosine(a,b):
         else:
             d[c]=result[0][1:]
 
-    print("%s with %s Diff:%.10f"%(a,b,cosine(d['a'],d['b'])))
+    print("%s vs. %s cosine distance:%.10f"%(a,b,cosine(d['a'],d['b'])))
+    # print("%s with %s Diff jaccard:%.10f" % (a, b, jaccard(d['a'], d['b'])))
 
-test_cosine("昆明","昆明市")
+test_cosine("盘州","盘县")

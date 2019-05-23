@@ -24,6 +24,8 @@ POS_TO_LABEL={
     "v":"Action"
 }
 
+NORMALIZED_MED_THRESHOLD=0.5
+
 class RegExtractor:
     def __init__(self,patterns):
         self.extractors=[]
@@ -48,6 +50,34 @@ class RegExtractor:
             if extactor.search(string):
                 hits.append(hitName)
         return hits
+
+
+def merge_entities(graph,label,patterns,this_name):
+    """
+
+    :param graph: graph instance
+    :param label: label of patterns and this_name
+    :param patterns: dict of pattern-realname
+    :param this_name: name of this entity
+    :return: None (matched entities merged by relation -[:is]->)
+    """
+    # assert patterns is not None
+    pending_entities=[]
+    for pattern in patterns:
+        # print(locals())
+        if med(pattern, this_name) / max(min(len(pattern), len(this_name)), 1) <= NORMALIZED_MED_THRESHOLD:
+            if patterns[pattern]==this_name:pass
+            else:
+                pending_entities.append((med(pattern, this_name) / max(min(len(pattern), len(this_name)), 1),patterns[pattern]))
+
+    pending_entities.sort()
+    print(pending_entities)
+    for _,name in pending_entities:
+        graph.run(
+            "MATCH (a:%s),(b:%s) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:is]->(b);" % (
+            label,label,this_name, name))
+        break
+
 
 def get_word_label(pos):
     try:
@@ -89,11 +119,13 @@ def add_case(graph,sentences,article,case_index=0,reg_extractor=None,location_pa
                 graph.run("MERGE (n:Location{name:'%s'}) ON CREATE SET n._subgraph = 'legalCase';" % (token['word']))
                 # graph.run("MERGE (n:Location{name:'%s'}) WHERE n._subgraph<>'baike' ON MATCH SET n._subgraph = 'legalCase' SET n.prefix = '%s';"%(token['word'],token['prefix']))
                 graph.run("MATCH (a:LegalCase),(b:Location) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:地理位于]->(b);"%(caseName,token['word']))
-                for pattern in location_patterns:
-                    # print(locals())
-                    if med(pattern,token['word'])/max(min(len(pattern),len(token['word'])),1)<=0.5:
-                        graph.run(
-                            "MATCH (a:Location),(b:Location) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:is]->(b);" % (token['word'],location_patterns[pattern]))
+
+                merge_entities(graph,label="Location",patterns=location_patterns,this_name=token['word'])
+                # for pattern in location_patterns:
+                #     # print(locals())
+                #     if med(pattern,token['word'])/max(min(len(pattern),len(token['word'])),1)<=0.5:
+                #         graph.run(
+                #             "MATCH (a:Location),(b:Location) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:is]->(b);" % (token['word'],location_patterns[pattern]))
             elif "PER" in token['lac_pos']:
                 graph.run("MERGE (:Person{name:'%s'});" % (token['word']+"_"+caseName))
                 graph.run(
@@ -122,40 +154,48 @@ def add_case(graph,sentences,article,case_index=0,reg_extractor=None,location_pa
                     "MATCH (a:LegalCase),(b:Time) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:相关时间]->(b);" % (
                     caseName, token['word']))
 
-                thisTime=token['word']
-                thisTime=thisTime.replace("零","0").replace("一","1").replace("二","2").replace("三","3").replace("四","4").replace("五","5").replace("六","6").replace("七","7").replace("八","8").replace("九","9").replace("十","1")
-                years=re.findall("[0-9]{4}年",thisTime)
-                months=re.findall("[0-9]{1,2}月",thisTime)
-                yearmonths=re.findall("[0-9]{4}年[0-9]{1,2}月",thisTime)
+                thisTime = token['word']
+                thisTime = thisTime.replace("零", "0").replace("一", "1").replace("二", "2").replace("三", "3").replace("四",
+                                                                                                                    "4").replace(
+                    "五", "5").replace("六", "6").replace("七", "7").replace("八", "8").replace("九", "9").replace("十", "1")
+                years = re.findall("[0-9]{4}年", thisTime)
+                months = re.findall("[0-9]{1,2}月", thisTime)
+                yearmonths = re.findall("[0-9]{4}年[0-9]{1,2}月", thisTime)
 
                 for y in years:
                     graph.run(
-                            "MERGE (n:Time:Year{name:'%s',_subgraph:'legalCase'}) ON MATCH SET n._subgraph = 'legalCase';" % (y))
+                        "MERGE (n:Time:Year{name:'%s',_subgraph:'legalCase'}) ON MATCH SET n._subgraph = 'legalCase';" % (
+                            y))
                     graph.run(
                         "MATCH (a:LegalCase),(b:Time) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:相关时间]->(b);" % (
-                        caseName, y))
+                            caseName, y))
                 for m in months:
                     graph.run(
-                        "MERGE (n:Time:Month{name:'%s',_subgraph:'legalCase'}) ON MATCH SET n._subgraph = 'legalCase';" % (m))
+                        "MERGE (n:Time:Month{name:'%s',_subgraph:'legalCase'}) ON MATCH SET n._subgraph = 'legalCase';" % (
+                            m))
                     graph.run(
                         "MATCH (a:LegalCase),(b:Time) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:相关时间]->(b);" % (
                             caseName, m))
 
                 for yearmonth in yearmonths:
                     graph.run(
-                        "MERGE (n:Time:YearMonth{name:'%s',_subgraph:'legalCase'}) ON MATCH SET n._subgraph = 'legalCase';" % (yearmonth))
+                        "MERGE (n:Time:YearMonth{name:'%s',_subgraph:'legalCase'}) ON MATCH SET n._subgraph = 'legalCase';" % (
+                            yearmonth))
                     for y in years:
                         if y in yearmonth:
                             graph.run(
-                            "MATCH (a:Time),(b:Time) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:相关时间]->(b);"% (yearmonth,y))
+                                "MATCH (a:Time),(b:Time) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:相关时间]->(b);" % (
+                                    yearmonth, y))
 
                     for m in months:
                         if m in yearmonth:
                             graph.run(
-                            "MATCH (a:Time),(b:Time) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:相关时间]->(b);"% (yearmonth,m))
+                                "MATCH (a:Time),(b:Time) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:相关时间]->(b);" % (
+                                    yearmonth, m))
 
                     graph.run(
-                        "MATCH (a:LegalCase),(b:Time) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:相关时间]->(b);" % (caseName,yearmonth))
+                        "MATCH (a:LegalCase),(b:Time) WHERE a.name='%s' AND b.name='%s' MERGE (a)-[:相关时间]->(b);" % (
+                            caseName, yearmonth))
 
         for aidx,ridx,bidx in sentence['manual_relations']:
             aidx,ridx,bidx=str(aidx),str(ridx),str(bidx)

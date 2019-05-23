@@ -44,6 +44,7 @@ def add_vecs():
             continue
         else:
             word=line[0]
+            if len(word)>30:word=word[:30]
             vec=[i for i in line[1:]]
 
             value="('"+conn.escape_string(word).decode("utf8")+"',%s)"%(",".join(vec))

@@ -87,6 +87,8 @@ lac2int={
 comma_marker={"comma":1,
               "no_comma":0}
 
+# EXEMPT={"经济技术开发区","高新技术开发区","开发区","高新区","保税区","市","县","区","自治区"}
+
 COMMAS=",，、"
 STOPS="。；？！?!"
 
@@ -128,7 +130,7 @@ def first_N(s,n=1):
 
 def med(a,b):
     """
-    Minimum edit distance algorithm(Levenshtein) implementation
+    Minimum edit distance algorithm(Levenshtein) implementation using dynamic programming
 
     :param a: str a
     :param b: str b
@@ -156,6 +158,59 @@ def med(a,b):
     #         print(" %d(%d:%d,%d)"%(memo[i * (lenb+1) + j],i * (lenb+1) + j,i,j),end=" ")
     # print("\n")
     return memo[(lena+1)*(lenb+1)-1]
+
+def lcs(str1,str2,minimum_len=0):
+    """
+    Longest common substring algorithm implementation using dynamic programming
+    :param str1:
+    :param str2:
+    :param minimum_len:
+    :return:
+    """
+    m = len(str1)
+    n = len(str2)
+    counter=array.array("l",[0 for i in range((n+1)*(m+1))])
+    longest = 0
+    current_lcs=""
+    for i in range(m):
+        for j in range(n):
+            if str1[i] == str2[j]:
+                c = counter[i*j] + 1
+                counter[(i+1)*(j+1)] = c
+                if c > longest and c>=minimum_len:
+                    result=str1[i-c+1:i+1]
+                    longest=c
+                    current_lcs=result
+                    # if result.upper() not in ENG_STR_NOT_A_GAME:
+                    #     longest = c
+                    #     lcs=result
+                elif c == longest:
+                    pass
+                    # lcs_set.add(S[i-c+1:i+1])
+    return current_lcs
+    # if lcs:
+    #     if longest-lcs.count(u"_")>=minimum_len:
+    #         return lcs
+    #     else:
+    #         return
+    # else:
+    #     return
+
+def related_med_score(s1,s2):
+    lens1,lens2=len(s1),len(s2)
+    lcstring=lcs(s1,s2)
+    # if lcstring in EXEMPT:
+    len_lcs=len(lcstring)
+
+    if lcs:
+        lcs_start_s1 = s1.find(lcstring)
+        lcs_start_s2 = s2.find(lcstring)
+        if lcs_start_s1 > 0 and lcs_start_s1 + len_lcs == lens1 and \
+           lcs_start_s2 > 0 and lcs_start_s2 + len_lcs == lens2:
+                s1,s2=s1.replace(lcstring,""),s2.replace(lcstring,"")
+
+    # print(s1,s2)
+    return med(s1,s2)/max(1,min(len(s1),len(s2)))
 
 def new_token(index,word,pos,lac_pos,dep,head,begin,end,prefix=""):
     return {
@@ -483,3 +538,6 @@ def lac_cut_pos(article):
         for w in sentence:
             s.append((w['word'],lac_to_penn_pos(w['type'])))
         yield s
+
+if __name__=="__main__":
+    print(med("盘县","六盘水市"))

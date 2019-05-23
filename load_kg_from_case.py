@@ -71,12 +71,13 @@ def load_kg_from_new_article(draw_tree=False):
 
     index=1
     last=""
-    jump=0
+    jump=96
     for i in range(1000):
         final_sentences = []
 
         articleJSON = json.loads(g.__next__())
         if jump:
+            index+=1
             jump-=1
             continue
         assert articleJSON!=last
