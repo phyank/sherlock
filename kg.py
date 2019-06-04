@@ -52,7 +52,7 @@ class RegExtractor:
         return hits
 
 
-def merge_entities(graph,label,patterns,this_name):
+def merge_entities(graph,label,patterns,this_name,use_wiki=True):
     """
 
     :param graph: graph instance

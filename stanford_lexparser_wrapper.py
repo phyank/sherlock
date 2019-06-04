@@ -2,7 +2,7 @@
 该模块将stanford parser中的LexicalizedParser类封装成一个web微服务
 特别封装该类是由于该类支持仅进行部分词类标注的输入，故能复用准确度比内置词性标注器更高的词法分析的标注结果
 由于LexicalizedParser main函数中的一个逻辑问题，需要修改edu.stanford.nlp.parser.lexparser.LexicalizedParser
-中的一行代码后本包装器才能正常运行
+中的一行代码后本包装器才能正常运行，建议使用 https://github.com/phyank/CoreNLP
 
 """
 
@@ -23,7 +23,7 @@ conf_dict=get_local_settings()
 
 CORENLP_DIR=conf_dict['corenlp_dir']
 
-CMD=['C:\\PROGRA~1\\Java\\JDK-10~1.2\\bin\\java',
+CMD=['java',
                   '-mx2g',
                   '-cp','*',
                   'edu.stanford.nlp.parser.lexparser.LexicalizedParser',

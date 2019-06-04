@@ -212,6 +212,23 @@ def related_med_score(s1,s2):
     # print(s1,s2)
     return med(s1,s2)/max(1,min(len(s1),len(s2)))
 
+def get_wiki(value):
+    try:
+        JSON=json.loads(urlopen("https://zh.wikipedia.org/w/api.php?%s"%urlencode({"action":"query",
+                                                                "prop":"revisions",
+                                                                "rvprop":"content",
+                                                                "format":"json",
+                                                                "titles":value,                                                                                                  "converttitles":"",
+                                                                "redirects":""})).read())
+    except:
+        return ""
+    else:
+        # print(JSON)
+        if "query" in JSON and "redirects" in JSON['query']:
+            return JSON['query']["redirects"][0]['to']
+        else:
+            return ""
+
 def new_token(index,word,pos,lac_pos,dep,head,begin,end,prefix=""):
     return {
             "index":str(index),
